@@ -1,0 +1,9 @@
+---
+version: "3.9"
+services:
+  develop:
+    image: cell:develop
+    volumes:
+      - "./:/root/cell"
+    working_dir: "/root/cell"
+    command: "/usr/bin/tail -f /dev/null"

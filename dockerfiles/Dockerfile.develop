@@ -1,0 +1,22 @@
+FROM ubuntu:22.04
+
+ENV DEBIAN_FRONTEND=noninteractive LANG=C.UTF-8
+
+RUN apt-get update &&\
+    apt-get install -y software-properties-common wget
+
+ARG CLANG_VERSION=14
+RUN wget https://apt.llvm.org/llvm.sh && chmod +x llvm.sh && ./llvm.sh ${CLANG_VERSION}
+ENV CC=clang-${CLANG_VERSION} CXX=clang++-${CLANG_VERSION}
+
+# 安装 bazel
+ARG BAZEL_VERSION=5.4.1
+
+# 安装 bazel 相关的工具
+RUN wget https://github.com/bazelbuild/bazel/releases/download/${BAZEL_VERSION}/bazel-${BAZEL_VERSION}-linux-x86_64 &&\
+    mv bazel-${BAZEL_VERSION}-linux-x86_64 /usr/local/bin/bazel &&\
+    chmod +x /usr/local/bin/bazel
+RUN wget https://github.com/bazelbuild/buildtools/releases/download/5.0.1/buildifier-linux-amd64 &&\
+    mv buildifier-linux-amd64 /usr/local/bin/buildifier &&\
+    chmod +x /usr/local/bin/buildifier
+

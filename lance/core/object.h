@@ -1,8 +1,10 @@
 #pragma once
 
+#include "lance/core/util.h"
+
 namespace lance {
 namespace core {
-class Object {
+class Object : public RefCounted {
  public:
   virtual ~Object() = default;
 };

@@ -32,6 +32,7 @@ VkApi::VkApi() {
   } while (false)
 
   VK_API_LOAD(vkEnumerateInstanceLayerProperties);
+  VK_API_LOAD(vkEnumerateInstanceExtensionProperties);
 
   VK_API_LOAD(vkCreateInstance);
   VK_API_LOAD(vkCreateDevice);

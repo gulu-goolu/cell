@@ -1,10 +1,18 @@
 cc_library(
     name = "rendering",
-    srcs = ["vk_api.cc"],
-    hdrs = ["vk_api.h"],
+    srcs = [
+        "device.cc",
+        "vk_api.cc",
+    ],
+    hdrs = [
+        "device.h",
+        "vk_api.h",
+    ],
     visibility = ["//visibility:public"],
     deps = [
+        "//lance/core",
         "@com_github_google_glog//:glog",
+        "@com_google_absl//absl/types:span",
         "@vulkan_headers",
     ],
 )

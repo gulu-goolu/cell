@@ -1,5 +1,7 @@
 #include "vk_api.h"
 
+#include "glog/logging.h"
+
 #if defined(__linux__)
 #include <dlfcn.h>
 #endif
@@ -13,10 +15,33 @@ const VkApi* VkApi::get() {
 
 VkApi::VkApi() {
 #if defined(__linux__)
-  shared_library_handle_ = dlopen("libvulkan-1.so", RTLD_NOW | RTLD_LOCAL);
+  shared_library_handle_ = dlopen("libvulkan.so.1", RTLD_NOW | RTLD_LOCAL);
+  CHECK(shared_library_handle_ != nullptr) << "err_msg: " << dlerror();
 #else
 #error "unsupported platform"
 #endif
+
+  const auto get_symbol_by_name = [this](const char* name) {
+    return dlsym(shared_library_handle_, name);
+  };
+
+#define VK_API_LOAD(API)                                                \
+  do {                                                                  \
+    API = reinterpret_cast<decltype(::API)*>(get_symbol_by_name(#API)); \
+    CHECK(API != nullptr) << dlerror();                                 \
+  } while (false)
+
+  VK_API_LOAD(vkEnumerateInstanceLayerProperties);
+
+  VK_API_LOAD(vkCreateInstance);
+  VK_API_LOAD(vkCreateDevice);
+  VK_API_LOAD(vkAllocateMemory);
+  VK_API_LOAD(vkCreateBuffer);
+  VK_API_LOAD(vkCreateBufferView);
+  VK_API_LOAD(vkCreateImage);
+  VK_API_LOAD(vkCreateImageView);
+
+#undef VK_API_LOAD
 }
 
 VkApi::~VkApi() {

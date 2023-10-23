@@ -10,6 +10,8 @@ class VkApi {
 
 #define VK_API_DEFINE(API) decltype(::API)* API = nullptr;
 
+  VK_API_DEFINE(vkEnumerateInstanceLayerProperties);
+
   VK_API_DEFINE(vkCreateInstance);
   VK_API_DEFINE(vkCreateDevice);
   VK_API_DEFINE(vkAllocateMemory);

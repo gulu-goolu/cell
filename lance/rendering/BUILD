@@ -3,7 +3,10 @@ cc_library(
     srcs = ["vk_api.cc"],
     hdrs = ["vk_api.h"],
     visibility = ["//visibility:public"],
-    deps = ["@vulkan_headers"],
+    deps = [
+        "@com_github_google_glog//:glog",
+        "@vulkan_headers",
+    ],
 )
 
 cc_test(

@@ -2,7 +2,7 @@
 
 #include "vulkan/vulkan.h"
 
-namespace cell {
+namespace lance {
 namespace rendering {
 class VkApi {
  public:
@@ -28,4 +28,4 @@ class VkApi {
   void* shared_library_handle_ = nullptr;
 };
 }  // namespace rendering
-}  // namespace cell
+}  // namespace lance

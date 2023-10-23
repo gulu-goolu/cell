@@ -1,1 +1,3 @@
 build --cxxopt=-std=c++17
+build --action_env="CC=clang-14"
+build --action_env="CXX=clang++-14"

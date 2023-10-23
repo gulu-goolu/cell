@@ -1,8 +1,9 @@
 cc_library(
     name = "core",
     hdrs = [
-        "util.h",
         "math.h",
+        "object.h",
+        "util.h",
     ],
     visibility = ["//visibility:public"],
     deps = [

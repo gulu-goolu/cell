@@ -35,3 +35,11 @@ http_archive(
 load("@hedron_compile_commands//:workspace_setup.bzl", "hedron_compile_commands_setup")
 
 hedron_compile_commands_setup()
+
+http_archive(
+    name = "com_google_googletest",
+    strip_prefix = "googletest-release-1.11.0",
+    urls = [
+        "https://github.com/google/googletest/archive/refs/tags/release-1.11.0.tar.gz",
+    ],
+)

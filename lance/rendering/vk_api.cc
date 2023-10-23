@@ -4,7 +4,7 @@
 #include <dlfcn.h>
 #endif
 
-namespace cell {
+namespace lance {
 namespace rendering {
 const VkApi* VkApi::get() {
   static const VkApi api;
@@ -29,4 +29,4 @@ VkApi::~VkApi() {
 #endif
 }
 }  // namespace rendering
-}  // namespace cell
+}  // namespace lance

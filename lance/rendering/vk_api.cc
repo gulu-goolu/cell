@@ -1,5 +1,6 @@
 #include "vk_api.h"
 
+#include "absl/strings/str_format.h"
 #include "glog/logging.h"
 
 #if defined(__linux__)
@@ -53,6 +54,23 @@ VkApi::~VkApi() {
 #else
 #error "unsupported platform"
 #endif
+}
+
+std::string VkResult_name(VkResult ret_code) {
+  switch (ret_code) {
+#define CASE_TO_STRING(NAME) \
+  case NAME: {               \
+    return #NAME;            \
+  } break
+
+    CASE_TO_STRING(VK_ERROR_OUT_OF_POOL_MEMORY);
+
+#undef CASE_TO_STRING
+
+    default: {
+      return absl::StrFormat("UnknownError, ret_code: %d", static_cast<int32_t>(ret_code));
+    }
+  }
 }
 }  // namespace rendering
 }  // namespace lance

@@ -1,7 +1,9 @@
 #pragma once
 
 #include <atomic>
+#include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <type_traits>
 
 #include "absl/status/status.h"
@@ -22,6 +24,8 @@ template <typename T>
 class RefCountPtr {
  public:
   static_assert(std::is_base_of_v<RefCounted, T>);
+
+  RefCountPtr(std::nullptr_t) {}
 
   RefCountPtr(T* ptr) { reset(ptr); }
 

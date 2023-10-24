@@ -1,6 +1,9 @@
 #pragma once
 
+#include "absl/status/statusor.h"
+#include "absl/types/span.h"
 #include "lance/core/object.h"
+#include "lance/core/util.h"
 #include "lance/rendering/vk_api.h"
 
 namespace lance {
@@ -9,6 +12,13 @@ class Device;
 
 class Instance : public core::Inherit<Instance, core::Object> {
  public:
+  // create instance
+  static absl::StatusOr<core::RefCountPtr<Instance>> create(absl::Span<const char*> layers,
+                                                            absl::Span<const char*> extensions);
+
+  // create a instance for 3d rendering
+  static absl::StatusOr<core::RefCountPtr<Instance>> create_for_3d();
+
   VkInstance vk_instance() const { return vk_instance_; }
 
  private:

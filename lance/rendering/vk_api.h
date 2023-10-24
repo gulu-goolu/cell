@@ -1,5 +1,7 @@
 #pragma once
 
+#include <string>
+
 #include "vulkan/vulkan.h"
 
 namespace lance {
@@ -30,5 +32,7 @@ class VkApi {
 
   void* shared_library_handle_ = nullptr;
 };
+
+std::string VkResult_name(VkResult ret_code);
 }  // namespace rendering
 }  // namespace lance

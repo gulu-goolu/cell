@@ -21,7 +21,10 @@ cc_library(
 
 cc_test(
     name = "unittests",
-    srcs = ["vk_api_test.cc"],
+    srcs = [
+        "device_test.cc",
+        "vk_api_test.cc",
+    ],
     deps = [
         ":rendering",
         "@com_google_googletest//:gtest_main",

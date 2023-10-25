@@ -2,17 +2,23 @@
 
 #include "absl/strings/str_format.h"
 #include "lance/core/util.h"
+#include "vk_api.h"
 
 namespace lance {
 namespace rendering {
 absl::StatusOr<core::RefCountPtr<Instance>> Instance::create(absl::Span<const char *> layers,
                                                              absl::Span<const char *> extensions) {
+  VkApplicationInfo application_info = {};
+  application_info.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
+  application_info.apiVersion = VK_API_VERSION_1_3;
+
   VkInstanceCreateInfo instance_create_info = {};
   instance_create_info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
   instance_create_info.enabledLayerCount = layers.size();
   instance_create_info.ppEnabledLayerNames = layers.data();
   instance_create_info.enabledExtensionCount = extensions.size();
   instance_create_info.ppEnabledExtensionNames = extensions.data();
+  instance_create_info.pApplicationInfo = &application_info;
 
   VkInstance vk_instance;
   VkResult ret_code = VkApi::get()->vkCreateInstance(&instance_create_info, nullptr, &vk_instance);
@@ -28,9 +34,27 @@ absl::StatusOr<core::RefCountPtr<Instance>> Instance::create(absl::Span<const ch
 }
 
 absl::StatusOr<core::RefCountPtr<Instance>> Instance::create_for_3d() {
-  const char *enabled_extensions[] = {"VK_KHR_swapchain"};
+  const char *enabled_extensions[] = {
+    "VK_KHR_surface",
+
+// for windows platform
+#if defined(_WIN64)
+    "VK_KHR_win32_surface"
+#endif
+
+  };
   return create({}, enabled_extensions);
 }
+
+absl::StatusOr<core::RefCountPtr<Device>> Instance::create_device(
+    absl::Span<const char *> extensions) {
+  return absl::UnknownError("failed to create device");
+}
+
+absl::StatusOr<core::RefCountPtr<Device>> Instance::create_for_graphics() { return nullptr; }
+
+Device::Device(VkDevice vk_device, core::RefCountPtr<Instance> instance)
+    : vk_device_(vk_device), instance_(instance) {}
 
 }  // namespace rendering
 }  // namespace lance

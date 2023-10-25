@@ -4,7 +4,7 @@
 #include "absl/types/span.h"
 #include "lance/core/object.h"
 #include "lance/core/util.h"
-#include "lance/rendering/vk_api.h"
+#include "vulkan/vulkan_core.h"
 
 namespace lance {
 namespace rendering {
@@ -21,15 +21,23 @@ class Instance : public core::Inherit<Instance, core::Object> {
 
   VkInstance vk_instance() const { return vk_instance_; }
 
+  absl::StatusOr<core::RefCountPtr<Device>> create_device(absl::Span<const char*> extensions);
+
+  absl::StatusOr<core::RefCountPtr<Device>> create_for_graphics();
+
  private:
   VkInstance vk_instance_{VK_NULL_HANDLE};
 };
 
 class Device : public core::Inherit<Device, core::Object> {
  private:
+  explicit Device(VkDevice vk_device, core::RefCountPtr<Instance> instance);
+
   VkDevice vk_device() const { return vk_device_; }
 
  public:
+  core::RefCountPtr<Instance> instance_;
+
   VkDevice vk_device_{VK_NULL_HANDLE};
 };
 }  // namespace rendering

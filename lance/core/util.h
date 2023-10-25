@@ -25,9 +25,14 @@ class RefCountPtr {
  public:
   static_assert(std::is_base_of_v<RefCounted, T>);
 
+  RefCountPtr() = default;
+
   RefCountPtr(std::nullptr_t) {}
 
   RefCountPtr(T* ptr) { reset(ptr); }
+
+  RefCountPtr(const RefCountPtr<T>& other) { reset(other.get()); }
+  RefCountPtr(RefCountPtr<T>&& other) : ptr_(other.release()) {}
 
   template <typename U>
   RefCountPtr(const RefCountPtr<U>& other) {
@@ -64,7 +69,9 @@ class RefCountPtr {
     return p;
   }
 
-  T* operator->() const { return ptr_; }
+  constexpr T* operator->() const noexcept { return ptr_; }
+
+  constexpr bool operator!=(std::nullptr_t) const noexcept { return ptr_ != nullptr; }
 
  private:
   T* ptr_ = nullptr;

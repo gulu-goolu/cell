@@ -46,6 +46,20 @@ absl::StatusOr<core::RefCountPtr<Instance>> Instance::create_for_3d() {
   return create({}, enabled_extensions);
 }
 
+absl::StatusOr<std::vector<VkPhysicalDevice>> Instance::enumerate_physical_devices() const {
+  uint32_t num_physical_device = 0;
+  VK_RETURN_IF_FAILED(
+      VkApi::get()->vkEnumeratePhysicalDevices(vk_instance_, &num_physical_device, nullptr));
+
+  std::vector<VkPhysicalDevice> physical_devices;
+  physical_devices.resize(num_physical_device);
+
+  VK_RETURN_IF_FAILED(VkApi::get()->vkEnumeratePhysicalDevices(vk_instance_, &num_physical_device,
+                                                               physical_devices.data()));
+
+  return physical_devices;
+}
+
 absl::StatusOr<core::RefCountPtr<Device>> Instance::create_device(
     absl::Span<const char *> extensions) {
   return absl::UnknownError("failed to create device");

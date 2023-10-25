@@ -4,6 +4,8 @@
 
 namespace lance {
 namespace core {
+struct TypeMetadata {};
+
 class Object : public RefCounted {
  public:
   virtual ~Object() = default;

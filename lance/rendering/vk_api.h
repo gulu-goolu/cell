@@ -2,7 +2,7 @@
 
 #include <string>
 
-#include "vulkan/vulkan.h"
+#include "vulkan/vulkan_core.h"
 
 namespace lance {
 namespace rendering {
@@ -22,6 +22,8 @@ class VkApi {
   VK_API_DEFINE(vkCreateBufferView);
   VK_API_DEFINE(vkCreateImage);
   VK_API_DEFINE(vkCreateImageView);
+  VK_API_DEFINE(vkEnumeratePhysicalDevices);
+  VK_API_DEFINE(vkGetPhysicalDeviceProperties);
 
 #undef VK_API_DEFINE
 
@@ -36,3 +38,12 @@ class VkApi {
 std::string VkResult_name(VkResult ret_code);
 }  // namespace rendering
 }  // namespace lance
+
+#define VK_RETURN_IF_FAILED(EXPR)                                                                \
+  do {                                                                                           \
+    VkResult ret = (EXPR);                                                                       \
+    if (ret != VK_SUCCESS) {                                                                     \
+      return absl::UnknownError(                                                                 \
+          absl::StrFormat("%s failed, ret: %s", #EXPR, ::lance::rendering::VkResult_name(ret))); \
+    }                                                                                            \
+  } while (false);

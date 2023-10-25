@@ -53,6 +53,8 @@ VkApi::VkApi() {
   VK_API_LOAD(vkCreateBufferView);
   VK_API_LOAD(vkCreateImage);
   VK_API_LOAD(vkCreateImageView);
+  VK_API_LOAD(vkEnumeratePhysicalDevices);
+  VK_API_LOAD(vkGetPhysicalDeviceProperties);
 
 #undef VK_API_LOAD
 }

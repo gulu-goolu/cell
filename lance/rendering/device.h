@@ -21,6 +21,8 @@ class Instance : public core::Inherit<Instance, core::Object> {
 
   VkInstance vk_instance() const { return vk_instance_; }
 
+  absl::StatusOr<std::vector<VkPhysicalDevice>> enumerate_physical_devices() const;
+
   absl::StatusOr<core::RefCountPtr<Device>> create_device(absl::Span<const char*> extensions);
 
   absl::StatusOr<core::RefCountPtr<Device>> create_for_graphics();

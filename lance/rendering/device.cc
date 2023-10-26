@@ -127,6 +127,20 @@ Device::~Device() {
   }
 }
 
+absl::StatusOr<core::RefCountPtr<ShaderModule>> Device::create_shader_module(
+    const core::Blob *blob) const {
+  VkShaderModuleCreateInfo shader_module_create_info = {};
+  shader_module_create_info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+  shader_module_create_info.codeSize = blob->size();
+  shader_module_create_info.pCode = reinterpret_cast<const uint32_t *>(blob->data());
+
+  VkShaderModule vk_shader_module{VK_NULL_HANDLE};
+  VK_RETURN_IF_FAILED(VkApi::get()->vkCreateShaderModule(vk_device_, &shader_module_create_info,
+                                                         nullptr, &vk_shader_module));
+
+  return core::make_refcounted<ShaderModule>(this, vk_shader_module);
+}
+
 Image::~Image() {
   if (vk_image_) {
     VkApi::get()->vkDestroyImage(device_->vk_device(), vk_image_, nullptr);

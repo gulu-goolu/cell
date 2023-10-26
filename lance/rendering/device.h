@@ -9,6 +9,7 @@
 namespace lance {
 namespace rendering {
 class Device;
+class ShaderModule;
 
 class Instance : public core::Inherit<Instance, core::Object> {
  public:
@@ -38,6 +39,9 @@ class Device : public core::Inherit<Device, core::Object> {
   ~Device();
 
   VkDevice vk_device() const { return vk_device_; }
+
+  absl::StatusOr<core::RefCountPtr<ShaderModule>> create_shader_module(
+      const core::Blob* blob) const;
 
  private:
   core::RefCountPtr<Instance> instance_;

@@ -17,7 +17,8 @@ void make_sure_glslang_ready() {
   static EnsureGlslangReady glslang_ready;
 }
 
-absl::StatusOr<std::string> compile_glsl_shader(const char* source, glslang_stage_t stage) {
+absl::StatusOr<core::RefCountPtr<core::Blob>> compile_glsl_shader(const char* source,
+                                                                  glslang_stage_t stage) {
   make_sure_glslang_ready();
 
   glslang_input_t input = {};
@@ -71,11 +72,8 @@ absl::StatusOr<std::string> compile_glsl_shader(const char* source, glslang_stag
 
   glslang_program_SPIRV_generate(program, stage);
 
-  std::string bin;
-  bin.resize(glslang_program_SPIRV_get_size(program));
-  glslang_program_SPIRV_get(program, reinterpret_cast<uint32_t*>(bin.data()));
-
-  return bin;
+  return core::Blob::create(glslang_program_SPIRV_get_ptr(program),
+                            glslang_program_SPIRV_get_size(program) * 4);
 }
 }  // namespace rendering
 }  // namespace lance

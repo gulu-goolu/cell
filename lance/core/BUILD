@@ -1,5 +1,6 @@
 cc_library(
     name = "core",
+    srcs = ["object.cc"],
     hdrs = [
         "math.h",
         "object.h",

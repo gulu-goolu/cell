@@ -101,6 +101,19 @@ inline RefCountPtr<T> make_refcounted(Args&&... args) {
   return RefCountPtr<Impl>(new Impl(std::forward<Args>(args)...));
 }
 
+template <typename Fn>
+inline auto on_scope_exited(Fn&& fn) -> decltype(auto) {
+  struct Helper {
+    Helper(Fn&& _fn) : fn(std::move(_fn)) {}
+
+    ~Helper() { fn(); }
+
+    Fn fn;
+  };
+
+  return Helper(std::forward<Fn&&>(fn));
+}
+
 }  // namespace core
 }  // namespace lance
 
@@ -123,3 +136,6 @@ inline RefCountPtr<T> make_refcounted(Args&&... args) {
     return LANCE_CONCAT(VAR, __LINE__).status(); \
   }                                              \
   auto VAR = std::move(LANCE_CONCAT(VAR, __LINE__).value())
+
+#define LANCE_ON_SCOPE_EXIT(EXPR) \
+  auto LANCE_CONCAT(scoped_guard_, __LINE__) = ::lance::core::on_scope_exited((EXPR))

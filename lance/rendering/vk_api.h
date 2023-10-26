@@ -1,7 +1,9 @@
 #pragma once
 
 #include <string>
+#include <vector>
 
+#include "absl/status/statusor.h"
 #include "vulkan/vulkan_core.h"
 
 namespace lance {
@@ -17,16 +19,23 @@ class VkApi {
 
   VK_API_DEFINE(vkCreateInstance);
   VK_API_DEFINE(vkCreateDevice);
+  VK_API_DEFINE(vkDestroyDevice);
   VK_API_DEFINE(vkAllocateMemory);
   VK_API_DEFINE(vkCreateBuffer);
   VK_API_DEFINE(vkCreateBufferView);
   VK_API_DEFINE(vkCreateImage);
+  VK_API_DEFINE(vkDestroyImage);
   VK_API_DEFINE(vkCreateImageView);
   VK_API_DEFINE(vkEnumeratePhysicalDevices);
   VK_API_DEFINE(vkGetPhysicalDeviceProperties);
   VK_API_DEFINE(vkGetPhysicalDeviceQueueFamilyProperties);
+  VK_API_DEFINE(vkCreateShaderModule);
+  VK_API_DEFINE(vkDestroyShaderModule);
 
 #undef VK_API_DEFINE
+
+  absl::StatusOr<std::vector<VkQueueFamilyProperties>> get_physical_device_queue_family_properties(
+      VkPhysicalDevice physical_device) const;
 
  private:
   VkApi();

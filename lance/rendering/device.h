@@ -32,15 +32,47 @@ class Instance : public core::Inherit<Instance, core::Object> {
 };
 
 class Device : public core::Inherit<Device, core::Object> {
- private:
-  explicit Device(VkDevice vk_device, core::RefCountPtr<Instance> instance);
+ public:
+  explicit Device(core::RefCountPtr<Instance> instance, VkDevice vk_device);
+
+  ~Device();
 
   VkDevice vk_device() const { return vk_device_; }
 
- public:
+ private:
   core::RefCountPtr<Instance> instance_;
-
   VkDevice vk_device_{VK_NULL_HANDLE};
 };
+
+class Image : public core::Inherit<Image, core::Object> {
+ public:
+  Image(core::RefCountPtr<Device> device, VkImage vk_image)
+      : device_(device), vk_image_(vk_image) {}
+
+  ~Image();
+
+  VkImage vk_image() const { return vk_image_; }
+
+ private:
+  core::RefCountPtr<Device> device_;
+  VkImage vk_image_{VK_NULL_HANDLE};
+};
+
+class ShaderModule : public core::Inherit<ShaderModule, core::Object> {
+ public:
+  ShaderModule(core::RefCountPtr<Device> device, VkShaderModule vk_shader_module)
+      : device_(device), vk_shader_module_(vk_shader_module) {}
+
+  ~ShaderModule();
+
+  VkShaderModule vk_shader_module() const { return vk_shader_module_; }
+
+ private:
+  core::RefCountPtr<Device> device_;
+  VkShaderModule vk_shader_module_{VK_NULL_HANDLE};
+};
+
+class Pipeline : public core::Inherit<Pipeline, core::Object> {};
+
 }  // namespace rendering
 }  // namespace lance

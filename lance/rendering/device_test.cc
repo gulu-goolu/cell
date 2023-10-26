@@ -20,6 +20,8 @@ TEST(instance, 3d) {
 
     LOG(INFO) << "device_name: " << props.deviceName;
   }
+
+  auto device = instance->create_for_graphics().value();
 }
 }  // namespace rendering
 }  // namespace lance

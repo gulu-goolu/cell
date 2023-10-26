@@ -16,6 +16,19 @@ const VkApi* VkApi::get() {
   return &api;
 }
 
+absl::StatusOr<std::vector<VkQueueFamilyProperties>>
+VkApi::get_physical_device_queue_family_properties(VkPhysicalDevice physical_device) const {
+  uint32_t queue_family_count = 0;
+  vkGetPhysicalDeviceQueueFamilyProperties(physical_device, &queue_family_count, nullptr);
+
+  std::vector<VkQueueFamilyProperties> props;
+  props.resize(queue_family_count);
+
+  vkGetPhysicalDeviceQueueFamilyProperties(physical_device, &queue_family_count, props.data());
+
+  return props;
+}
+
 VkApi::VkApi() {
 #if defined(__linux__)
   shared_library_handle_ = dlopen("libvulkan.so.1", RTLD_NOW | RTLD_LOCAL);
@@ -48,14 +61,18 @@ VkApi::VkApi() {
 
   VK_API_LOAD(vkCreateInstance);
   VK_API_LOAD(vkCreateDevice);
+  VK_API_LOAD(vkDestroyDevice);
   VK_API_LOAD(vkAllocateMemory);
   VK_API_LOAD(vkCreateBuffer);
   VK_API_LOAD(vkCreateBufferView);
   VK_API_LOAD(vkCreateImage);
+  VK_API_LOAD(vkDestroyImage);
   VK_API_LOAD(vkCreateImageView);
   VK_API_LOAD(vkEnumeratePhysicalDevices);
   VK_API_LOAD(vkGetPhysicalDeviceProperties);
   VK_API_LOAD(vkGetPhysicalDeviceQueueFamilyProperties);
+  VK_API_LOAD(vkCreateShaderModule);
+  VK_API_LOAD(vkDestroyShaderModule);
 
 #undef VK_API_LOAD
 }

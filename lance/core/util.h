@@ -34,12 +34,12 @@ class RefCountPtr {
   RefCountPtr(const RefCountPtr<T>& other) { reset(other.get()); }
   RefCountPtr(RefCountPtr<T>&& other) : ptr_(other.release()) {}
 
-  template <typename U>
+  template <typename U, typename = std::enable_if_t<std::is_base_of_v<T, U>, void>>
   RefCountPtr(const RefCountPtr<U>& other) {
     reset(other.get());
   }
 
-  template <typename U>
+  template <typename U, typename = std::enable_if_t<std::is_base_of_v<T, U>, void>>
   RefCountPtr(RefCountPtr<U>&& other) : ptr_(other.release()) {}
 
   ~RefCountPtr() {
@@ -83,6 +83,8 @@ inline RefCountPtr<T> make_refcounted(Args&&... args) {
 
   class Impl : public T {
    public:
+    using T::T;
+
     void add_ref() const final { count_.fetch_add(1, std::memory_order_relaxed); }
     void release() const final {
       if (count_.fetch_sub(1, std::memory_order_acq_rel) == 1) {
@@ -96,7 +98,7 @@ inline RefCountPtr<T> make_refcounted(Args&&... args) {
     mutable std::atomic_uint_fast64_t count_{0};
   };
 
-  return RefCountPtr<Impl>(new Impl);
+  return RefCountPtr<Impl>(new Impl(std::forward<Args>(args)...));
 }
 
 }  // namespace core

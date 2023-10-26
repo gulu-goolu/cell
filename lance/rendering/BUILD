@@ -2,10 +2,12 @@ cc_library(
     name = "rendering",
     srcs = [
         "device.cc",
+        "render_graph.cc",
         "vk_api.cc",
     ],
     hdrs = [
         "device.h",
+        "render_graph.h",
         "vk_api.h",
     ],
     visibility = ["//visibility:public"],

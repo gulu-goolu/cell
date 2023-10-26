@@ -110,3 +110,14 @@ inline RefCountPtr<T> make_refcounted(Args&&... args) {
       return st;                     \
     }                                \
   } while (false)
+
+#define LANCE_CONCAT_V2(STR1, STR2) STR1##STR2
+
+#define LANCE_CONCAT(STR1, STR2) LANCE_CONCAT_V2(STR1, STR2)
+
+#define LANCE_ASSIGN_OR_RETURN(VAR, EXPR)        \
+  auto LANCE_CONCAT(VAR, __LINE__) = (EXPR);     \
+  if (!LANCE_CONCAT(VAR, __LINE__).ok()) {       \
+    return LANCE_CONCAT(VAR, __LINE__).status(); \
+  }                                              \
+  auto VAR = std::move(LANCE_CONCAT(VAR, __LINE__).value())

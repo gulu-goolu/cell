@@ -65,7 +65,16 @@ absl::StatusOr<core::RefCountPtr<Device>> Instance::create_device(
   return absl::UnknownError("failed to create device");
 }
 
-absl::StatusOr<core::RefCountPtr<Device>> Instance::create_for_graphics() { return nullptr; }
+absl::StatusOr<core::RefCountPtr<Device>> Instance::create_for_graphics() {
+  LANCE_ASSIGN_OR_RETURN(physical_devices, enumerate_physical_devices());
+
+  VkPhysicalDevice physical_device = VK_NULL_HANDLE;
+  for (auto dev : physical_devices) {
+    VkApi::get()->vkGetPhysicalDeviceProperties(dev, nullptr);
+  }
+
+  return nullptr;
+}
 
 Device::Device(VkDevice vk_device, core::RefCountPtr<Instance> instance)
     : vk_device_(vk_device), instance_(instance) {}

@@ -24,6 +24,7 @@ class VkApi {
   VK_API_DEFINE(vkCreateImageView);
   VK_API_DEFINE(vkEnumeratePhysicalDevices);
   VK_API_DEFINE(vkGetPhysicalDeviceProperties);
+  VK_API_DEFINE(vkGetPhysicalDeviceQueueFamilyProperties);
 
 #undef VK_API_DEFINE
 

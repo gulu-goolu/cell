@@ -141,6 +141,9 @@ inline auto on_scope_exited(Fn&& fn) -> decltype(auto) {
   return Helper(std::forward<Fn&&>(fn));
 }
 
+template <typename T>
+using Ref = core::RefCountPtr<T>;
+
 }  // namespace core
 }  // namespace lance
 

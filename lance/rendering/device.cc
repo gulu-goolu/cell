@@ -74,6 +74,19 @@ absl::StatusOr<core::RefCountPtr<Device>> Instance::create_device(
 absl::StatusOr<core::RefCountPtr<Device>> Instance::create_device_for_graphics() {
   LANCE_ASSIGN_OR_RETURN(physical_devices, enumerate_physical_devices());
 
+  std::sort(physical_devices.begin(), physical_devices.end(),
+            [](VkPhysicalDevice l, VkPhysicalDevice r) {
+              VkPhysicalDeviceProperties props1, props2;
+              VkApi::get()->vkGetPhysicalDeviceProperties(l, &props1);
+              VkApi::get()->vkGetPhysicalDeviceProperties(r, &props2);
+
+              const static std::unordered_map<VkPhysicalDeviceType, int32_t> m = {
+                  {VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU, 1},
+                  {VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU, 2},
+              };
+              return m.at(props1.deviceType) > m.at(props2.deviceType);
+            });
+
   VkPhysicalDevice target_device = VK_NULL_HANDLE;
   uint32_t graphics_queue_famil_index = UINT32_MAX;
   for (auto physical_device : physical_devices) {
@@ -131,7 +144,11 @@ Device::Device(core::RefCountPtr<Instance> instance, VkPhysicalDevice vk_physica
       vk_physical_device_(vk_physical_device),
       vk_device_(vk_device),
       queue_family_indices_(queue_family_indices.begin(), queue_family_indices.end()) {
-  LOG(INFO) << "queue_family_indices: [" << absl::StrJoin(queue_family_indices, ",") << "]";
+  VkPhysicalDeviceProperties properties;
+  VkApi::get()->vkGetPhysicalDeviceProperties(vk_physical_device, &properties);
+
+  LOG(INFO) << "queue_family_indices: [" << absl::StrJoin(queue_family_indices, ",")
+            << "], device_name: " << properties.deviceName;
 }
 
 Device::~Device() {
@@ -193,10 +210,80 @@ absl::Status Device::submit(uint32_t queue_family_index,
   return absl::OkStatus();
 }
 
+absl::StatusOr<uint32_t> Device::find_memory_type_index(uint32_t type_bits,
+                                                        VkMemoryPropertyFlags flags) const {
+  VkPhysicalDeviceMemoryProperties memory_properties;
+  VkApi::get()->vkGetPhysicalDeviceMemoryProperties(vk_physical_device_, &memory_properties);
+
+  for (uint32_t i = 0; i < memory_properties.memoryTypeCount; ++i) {
+    if (((1 << i) & type_bits) &&
+        ((memory_properties.memoryTypes[i].propertyFlags & flags) == flags)) {
+      return i;
+    }
+  }
+
+  return absl::NotFoundError(absl::StrFormat("no suitable memory found, flags: %d", type_bits));
+}
+
+absl::StatusOr<core::RefCountPtr<DeviceMemory>> DeviceMemory::create(
+    const core::RefCountPtr<Device> &device, uint32_t memory_type_index, size_t allocation_size) {
+  VkDeviceMemory vk_device_memory{VK_NULL_HANDLE};
+
+  VkMemoryAllocateInfo memory_allocate_info = {};
+  memory_allocate_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+  memory_allocate_info.allocationSize = allocation_size;
+  memory_allocate_info.memoryTypeIndex = memory_type_index;
+  VK_RETURN_IF_FAILED(VkApi::get()->vkAllocateMemory(device->vk_device(), &memory_allocate_info,
+                                                     nullptr, &vk_device_memory));
+
+  return core::make_refcounted<DeviceMemory>(device, vk_device_memory);
+}
+
+DeviceMemory::~DeviceMemory() {
+  if (vk_device_memory_) {
+    VkApi::get()->vkFreeMemory(device_->vk_device(), vk_device_memory_, nullptr);
+  }
+}
+
+absl::StatusOr<void *> DeviceMemory::map(size_t offset, size_t size) {
+  void *addr = nullptr;
+  VK_RETURN_IF_FAILED(
+      VkApi::get()->vkMapMemory(device_->vk_device(), vk_device_memory_, offset, size, 0, &addr));
+
+  return addr;
+}
+
+absl::Status DeviceMemory::unmap() {
+  VkApi::get()->vkUnmapMemory(device_->vk_device(), vk_device_memory_);
+
+  return absl::OkStatus();
+}
+
+Buffer::~Buffer() {
+  if (vk_buffer_) {
+    VkApi::get()->vkDestroyBuffer(device_->vk_device(), vk_buffer_, nullptr);
+  }
+}
+
+VkMemoryRequirements Buffer::memory_requirements() const {
+  VkMemoryRequirements memory_requirements;
+  VkApi::get()->vkGetBufferMemoryRequirements(device_->vk_device(), vk_buffer_,
+                                              &memory_requirements);
+
+  return memory_requirements;
+}
+
 Image::~Image() {
   if (vk_image_) {
     VkApi::get()->vkDestroyImage(device_->vk_device(), vk_image_, nullptr);
   }
+}
+
+VkMemoryRequirements Image::memory_requirements() const {
+  VkMemoryRequirements memory_requirements;
+  VkApi::get()->vkGetImageMemoryRequirements(device_->vk_device(), vk_image_, &memory_requirements);
+
+  return memory_requirements;
 }
 
 ImageView::~ImageView() {
@@ -224,6 +311,16 @@ absl::StatusOr<core::RefCountPtr<DescriptorSetLayout>> DescriptorSetLayout::crea
       device->vk_device(), &descriptor_set_layout_create_info, nullptr, &vk_descriptor_set_layout));
 
   return core::make_refcounted<DescriptorSetLayout>(device, vk_descriptor_set_layout);
+}
+
+absl::StatusOr<core::Ref<DescriptorSetLayout>> DescriptorSetLayout::create_for_single_descriptor(
+    const core::Ref<Device> &device, VkDescriptorType type, VkShaderStageFlags stage) {
+  VkDescriptorSetLayoutBinding binding = {};
+  binding.binding = 0;
+  binding.descriptorCount = 1;
+  binding.descriptorType = type;
+  binding.stageFlags = stage;
+  return create(device, {binding});
 }
 
 DescriptorSetLayout::~DescriptorSetLayout() {

@@ -49,11 +49,53 @@ class Device : public core::Inherit<Device, core::Object> {
   absl::Status submit(uint32_t queue_family_index,
                       absl::Span<const VkCommandBuffer> vk_command_buffers);
 
+  absl::StatusOr<uint32_t> find_memory_type_index(uint32_t type_bits,
+                                                  VkMemoryPropertyFlags flags) const;
+
  private:
   core::RefCountPtr<Instance> instance_;
   VkPhysicalDevice vk_physical_device_{VK_NULL_HANDLE};
   VkDevice vk_device_{VK_NULL_HANDLE};
   std::vector<uint32_t> queue_family_indices_;
+};
+
+class DeviceMemory : public core::Inherit<DeviceMemory, core::Object> {
+ public:
+  static absl::StatusOr<core::RefCountPtr<DeviceMemory>> create(
+      const core::RefCountPtr<Device>& device, uint32_t memory_type_index, size_t allocation_size);
+
+  DeviceMemory(core::RefCountPtr<Device> device, VkDeviceMemory vk_device_memory)
+      : device_(device), vk_device_memory_(vk_device_memory) {}
+
+  ~DeviceMemory();
+
+  VkDeviceMemory vk_device_memory() const { return vk_device_memory_; }
+
+  // map for read
+  absl::StatusOr<void*> map(size_t offset, size_t size);
+
+  //
+  absl::Status unmap();
+
+ private:
+  core::Ref<Device> device_;
+  VkDeviceMemory vk_device_memory_{VK_NULL_HANDLE};
+};
+
+class Buffer : public core::Inherit<Buffer, core::Object> {
+ public:
+  Buffer(core::RefCountPtr<Device> device, VkBuffer vk_buffer)
+      : device_(device), vk_buffer_(vk_buffer) {}
+
+  ~Buffer();
+
+  VkBuffer vk_buffer() const { return vk_buffer_; }
+
+  VkMemoryRequirements memory_requirements() const;
+
+ private:
+  core::RefCountPtr<Device> device_;
+  VkBuffer vk_buffer_{VK_NULL_HANDLE};
 };
 
 class Image : public core::Inherit<Image, core::Object> {
@@ -64,6 +106,8 @@ class Image : public core::Inherit<Image, core::Object> {
   ~Image();
 
   VkImage vk_image() const { return vk_image_; }
+
+  VkMemoryRequirements memory_requirements() const;
 
  private:
   core::RefCountPtr<Device> device_;
@@ -100,9 +144,11 @@ class ShaderModule : public core::Inherit<ShaderModule, core::Object> {
 
 class DescriptorSetLayout : public core::Inherit<DescriptorSetLayout, core::Object> {
  public:
-  static absl::StatusOr<core::RefCountPtr<DescriptorSetLayout>> create(
-      const core::RefCountPtr<Device>& device,
-      absl::Span<const VkDescriptorSetLayoutBinding> bindings);
+  static absl::StatusOr<core::Ref<DescriptorSetLayout>> create(
+      const core::Ref<Device>& device, absl::Span<const VkDescriptorSetLayoutBinding> bindings);
+
+  static absl::StatusOr<core::Ref<DescriptorSetLayout>> create_for_single_descriptor(
+      const core::Ref<Device>& device, VkDescriptorType type, VkShaderStageFlags stage);
 
   DescriptorSetLayout(core::RefCountPtr<Device> device,
                       VkDescriptorSetLayout vk_descriptor_set_layout)

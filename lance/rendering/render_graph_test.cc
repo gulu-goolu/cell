@@ -33,6 +33,7 @@ TEST(render_graph, compute) {
   const char* add_shader = R"glsl(
 #version 450 core
 
+layout(local_size_x=512, local_size_y=1, local_size_z=1) in;
 
 void main() {
 

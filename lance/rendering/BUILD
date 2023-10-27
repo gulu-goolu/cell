@@ -37,3 +37,13 @@ cc_test(
         "@com_google_googletest//:gtest_main",
     ],
 )
+
+cc_test(
+    name = "render_graph_test",
+    srcs = ["render_graph_test.cc"],
+    linkstatic = True,
+    deps = [
+        ":rendering",
+        "@com_google_googletest//:gtest_main",
+    ],
+)

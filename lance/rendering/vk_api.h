@@ -26,11 +26,19 @@ class VkApi {
   VK_API_DEFINE(vkCreateImage);
   VK_API_DEFINE(vkDestroyImage);
   VK_API_DEFINE(vkCreateImageView);
+  VK_API_DEFINE(vkDestroyImageView);
   VK_API_DEFINE(vkEnumeratePhysicalDevices);
   VK_API_DEFINE(vkGetPhysicalDeviceProperties);
   VK_API_DEFINE(vkGetPhysicalDeviceQueueFamilyProperties);
   VK_API_DEFINE(vkCreateShaderModule);
   VK_API_DEFINE(vkDestroyShaderModule);
+  VK_API_DEFINE(vkCmdDispatch);
+  VK_API_DEFINE(vkCmdDispatchBase);
+  VK_API_DEFINE(vkCmdDispatchIndirect);
+  VK_API_DEFINE(vkCmdBindDescriptorSets);
+  VK_API_DEFINE(vkCmdBindIndexBuffer);
+  VK_API_DEFINE(vkCmdBindVertexBuffers);
+  VK_API_DEFINE(vkCmdBindPipeline);
 
 #undef VK_API_DEFINE
 

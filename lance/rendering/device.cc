@@ -65,7 +65,7 @@ absl::StatusOr<core::RefCountPtr<Device>> Instance::create_device(
   return absl::UnknownError("failed to create device");
 }
 
-absl::StatusOr<core::RefCountPtr<Device>> Instance::create_for_graphics() {
+absl::StatusOr<core::RefCountPtr<Device>> Instance::create_device_for_graphics() {
   LANCE_ASSIGN_OR_RETURN(physical_devices, enumerate_physical_devices());
 
   VkPhysicalDevice target_device = VK_NULL_HANDLE;
@@ -128,7 +128,7 @@ Device::~Device() {
 }
 
 absl::StatusOr<core::RefCountPtr<ShaderModule>> Device::create_shader_module(
-    const core::Blob *blob) const {
+    const core::Blob *blob) {
   VkShaderModuleCreateInfo shader_module_create_info = {};
   shader_module_create_info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
   shader_module_create_info.codeSize = blob->size();
@@ -144,6 +144,12 @@ absl::StatusOr<core::RefCountPtr<ShaderModule>> Device::create_shader_module(
 Image::~Image() {
   if (vk_image_) {
     VkApi::get()->vkDestroyImage(device_->vk_device(), vk_image_, nullptr);
+  }
+}
+
+ImageView::~ImageView() {
+  if (vk_image_view_) {
+    VkApi::get()->vkDestroyImageView(device_->vk_device(), vk_image_view_, nullptr);
   }
 }
 

@@ -68,11 +68,19 @@ VkApi::VkApi() {
   VK_API_LOAD(vkCreateImage);
   VK_API_LOAD(vkDestroyImage);
   VK_API_LOAD(vkCreateImageView);
+  VK_API_LOAD(vkDestroyImageView);
   VK_API_LOAD(vkEnumeratePhysicalDevices);
   VK_API_LOAD(vkGetPhysicalDeviceProperties);
   VK_API_LOAD(vkGetPhysicalDeviceQueueFamilyProperties);
   VK_API_LOAD(vkCreateShaderModule);
   VK_API_LOAD(vkDestroyShaderModule);
+  VK_API_LOAD(vkCmdDispatch);
+  VK_API_LOAD(vkCmdDispatchBase);
+  VK_API_LOAD(vkCmdDispatchIndirect);
+  VK_API_LOAD(vkCmdBindDescriptorSets);
+  VK_API_LOAD(vkCmdBindIndexBuffer);
+  VK_API_LOAD(vkCmdBindVertexBuffers);
+  VK_API_LOAD(vkCmdBindPipeline);
 
 #undef VK_API_LOAD
 }

@@ -3,10 +3,7 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
-#include <optional>
 #include <type_traits>
-
-#include "absl/status/status.h"
 
 namespace lance {
 namespace core {
@@ -41,6 +38,36 @@ class RefCountPtr {
 
   template <typename U, typename = std::enable_if_t<std::is_base_of_v<T, U>, void>>
   RefCountPtr(RefCountPtr<U>&& other) : ptr_(other.release()) {}
+
+  RefCountPtr<T>& operator=(const RefCountPtr<T>& other) {
+    reset(other.get());
+
+    return *this;
+  }
+
+  RefCountPtr<T>& operator=(RefCountPtr<T>&& other) {
+    reset(nullptr);
+
+    ptr_ = other.release();
+
+    return *this;
+  }
+
+  template <typename U, typename = std::enable_if_t<std::is_base_of_v<T, U>, void>>
+  RefCountPtr<T>& operator=(const core::RefCountPtr<U>& other) {
+    reset(other.get());
+
+    return *this;
+  }
+
+  template <typename U, typename = std::enable_if_t<std::is_base_of_v<T, U>, void>>
+  RefCountPtr<T>& operator=(core::RefCountPtr<U>&& other) {
+    reset(nullptr);
+
+    ptr_ = other.release();
+
+    return *this;
+  }
 
   ~RefCountPtr() {
     if (ptr_) {

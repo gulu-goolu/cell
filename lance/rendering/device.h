@@ -26,7 +26,7 @@ class Instance : public core::Inherit<Instance, core::Object> {
 
   absl::StatusOr<core::RefCountPtr<Device>> create_device(absl::Span<const char*> extensions);
 
-  absl::StatusOr<core::RefCountPtr<Device>> create_for_graphics();
+  absl::StatusOr<core::RefCountPtr<Device>> create_device_for_graphics();
 
  private:
   VkInstance vk_instance_{VK_NULL_HANDLE};
@@ -40,8 +40,7 @@ class Device : public core::Inherit<Device, core::Object> {
 
   VkDevice vk_device() const { return vk_device_; }
 
-  absl::StatusOr<core::RefCountPtr<ShaderModule>> create_shader_module(
-      const core::Blob* blob) const;
+  absl::StatusOr<core::RefCountPtr<ShaderModule>> create_shader_module(const core::Blob* blob);
 
  private:
   core::RefCountPtr<Instance> instance_;
@@ -60,6 +59,20 @@ class Image : public core::Inherit<Image, core::Object> {
  private:
   core::RefCountPtr<Device> device_;
   VkImage vk_image_{VK_NULL_HANDLE};
+};
+
+class ImageView : public core::Inherit<ImageView, core::Object> {
+ public:
+  ImageView(core::RefCountPtr<Device> device, VkImageView image_view)
+      : device_(device), vk_image_view_(image_view) {}
+
+  ~ImageView();
+
+  VkImageView vk_image_view() const { return vk_image_view_; }
+
+ private:
+  core::RefCountPtr<Device> device_;
+  VkImageView vk_image_view_{VK_NULL_HANDLE};
 };
 
 class ShaderModule : public core::Inherit<ShaderModule, core::Object> {

@@ -81,6 +81,7 @@ VkApi::VkApi() {
   VK_API_LOAD(vkCmdBindIndexBuffer);
   VK_API_LOAD(vkCmdBindVertexBuffers);
   VK_API_LOAD(vkCmdBindPipeline);
+  VK_API_LOAD(vkCreateComputePipelines);
 
 #undef VK_API_LOAD
 }

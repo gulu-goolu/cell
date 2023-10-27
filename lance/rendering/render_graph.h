@@ -19,7 +19,6 @@ class PassBuilder {
   virtual absl::Status set_depth_attachment(std::string_view id) = 0;
   virtual absl::Status set_shader(VkShaderStageFlagBits stage,
                                   core::RefCountPtr<ShaderModule> shader_module) = 0;
-  virtual absl::Status set_draw_fn() = 0;
 
   absl::Status set_vertex_shader(core::RefCountPtr<ShaderModule> shader_module) {
     return set_shader(VK_SHADER_STAGE_VERTEX_BIT, shader_module);

@@ -39,6 +39,7 @@ class VkApi {
   VK_API_DEFINE(vkCmdBindIndexBuffer);
   VK_API_DEFINE(vkCmdBindVertexBuffers);
   VK_API_DEFINE(vkCmdBindPipeline);
+  VK_API_DEFINE(vkCreateComputePipelines);
 
 #undef VK_API_DEFINE
 

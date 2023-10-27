@@ -40,6 +40,10 @@ class VkApi {
   VK_API_DEFINE(vkCmdBindVertexBuffers);
   VK_API_DEFINE(vkCmdBindPipeline);
   VK_API_DEFINE(vkCreateComputePipelines);
+  VK_API_DEFINE(vkCreatePipelineLayout);
+  VK_API_DEFINE(vkCreateDescriptorSetLayout);
+  VK_API_DEFINE(vkDestroyDescriptorSetLayout);
+  VK_API_DEFINE(vkCmdPushConstants);
 
 #undef VK_API_DEFINE
 

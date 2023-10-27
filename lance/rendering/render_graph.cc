@@ -7,6 +7,48 @@
 namespace lance {
 namespace rendering {
 namespace {
+class Pass {
+ public:
+  virtual ~Pass() = default;
+
+  virtual absl::Status execute(VkCommandBuffer cmd) = 0;
+};
+
+class ComputePass : public Pass {
+ public:
+  ComputePass(std::function<absl::Status(Context *)> execute_fn,
+              VkPipelineLayout vk_pipeline_layout, VkPipeline vk_pipeline)
+      : execute_fn_(execute_fn),
+        vk_pipeline_layout_(vk_pipeline_layout),
+        vk_pipeline_(vk_pipeline) {}
+
+  absl::Status execute(VkCommandBuffer cmd) override {
+    VkApi::get()->vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, vk_pipeline_);
+
+    class ContextImpl : public Context {
+     public:
+      ContextImpl(ComputePass *pass, VkCommandBuffer vk_command_buffer)
+          : pass_(pass), vk_command_buffer_(vk_command_buffer) {}
+
+      VkCommandBuffer vk_command_buffer() const override { return vk_command_buffer_; }
+      VkPipeline vk_pipeline() const override { return pass_->vk_pipeline_; }
+      VkPipelineLayout vk_pipeline_layout() const override { return pass_->vk_pipeline_layout_; }
+
+     private:
+      ComputePass *pass_ = nullptr;
+      VkCommandBuffer vk_command_buffer_{VK_NULL_HANDLE};
+    };
+
+    ContextImpl ctx(this, cmd);
+    return execute_fn_(&ctx);
+  }
+
+ private:
+  const std::function<absl::Status(Context *)> execute_fn_;
+  VkPipelineLayout vk_pipeline_layout_{VK_NULL_HANDLE};
+  VkPipeline vk_pipeline_{VK_NULL_HANDLE};
+};
+
 class PassBuilderImpl : public PassBuilder {
  public:
   PassBuilderImpl(core::RefCountPtr<Device> device) : device_(device) {}
@@ -26,11 +68,50 @@ class PassBuilderImpl : public PassBuilder {
     return absl::OkStatus();
   }
 
+  absl::Status set_descriptor_set_layout(
+      uint32_t set, core::RefCountPtr<DescriptorSetLayout> descriptor_set_layout) override {
+    return absl::OkStatus();
+  }
+
+  absl::Status add_descriptor_binding(uint32_t set, VkDescriptorSetLayoutBinding binding) override {
+    auto &descriptor_set = buffer_descriptors_[set];
+    if (descriptor_set.find(binding.binding) != descriptor_set.end()) {
+      return absl::AlreadyExistsError(
+          absl::StrFormat("binding already exits, binding: %d", binding.binding));
+    }
+
+    descriptor_set[binding.binding] = binding;
+
+    return absl::OkStatus();
+  }
+
   bool is_compute_pass() const {
     return shader_modules_.find(VK_SHADER_STAGE_COMPUTE_BIT) != shader_modules_.end();
   }
 
-  absl::StatusOr<VkPipelineLayout> create_pipeline_layout() const { return absl::OkStatus(); }
+  absl::StatusOr<VkPipelineLayout> create_pipeline_layout() const {
+    uint32_t max_binding = 0;
+    for (const auto &pair : descriptor_set_layouts_) {
+      max_binding = std::max<uint32_t>(pair.first, max_binding);
+    }
+
+    std::vector<VkDescriptorSetLayout> set_layouts;
+    set_layouts.resize(max_binding + 1, VK_NULL_HANDLE);
+    for (const auto &pair : descriptor_set_layouts_) {
+      set_layouts[pair.first] = pair.second->vk_descriptor_set_layout();
+    }
+
+    VkPipelineLayoutCreateInfo pipeline_layout_create_info = {};
+    pipeline_layout_create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    pipeline_layout_create_info.setLayoutCount = set_layouts.size();
+    pipeline_layout_create_info.pSetLayouts = set_layouts.data();
+
+    VkPipelineLayout vk_pipeline_layout;
+    VK_RETURN_IF_FAILED(VkApi::get()->vkCreatePipelineLayout(
+        device_->vk_device(), &pipeline_layout_create_info, nullptr, &vk_pipeline_layout));
+
+    return vk_pipeline_layout;
+  }
 
   absl::StatusOr<VkPipeline> create_compute_pipeline(VkPipelineLayout vk_pipeline_layout) const {
     auto it = shader_modules_.find(VK_SHADER_STAGE_COMPUTE_BIT);
@@ -55,32 +136,27 @@ class PassBuilderImpl : public PassBuilder {
     return vk_pipeline;
   }
 
- private:
-  core::RefCountPtr<Device> device_;
-  std::unordered_map<VkShaderStageFlagBits, core::RefCountPtr<ShaderModule>> shader_modules_;
-};
+  absl::StatusOr<std::unique_ptr<Pass>> create_pass(
+      std::function<absl::Status(Context *)> execute_fn) const {
+    if (is_compute_pass()) {
+      LANCE_ASSIGN_OR_RETURN(pipeline_layout, create_pipeline_layout());
 
-class Pass {
- public:
-  virtual ~Pass() = default;
+      LANCE_ASSIGN_OR_RETURN(pipeline, create_compute_pipeline(pipeline_layout));
 
-  virtual absl::Status execute(VkCommandBuffer cmd) = 0;
-};
-
-class ComputePass : public Pass {
- public:
-  ComputePass(std::function<absl::Status(VkCommandBuffer)> execute_fn, VkPipeline vk_pipeline)
-      : execute_fn_(execute_fn), vk_pipeline_(vk_pipeline) {}
-
-  absl::Status execute(VkCommandBuffer cmd) override {
-    VkApi::get()->vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, vk_pipeline_);
-
-    return execute_fn_(cmd);
+      return std::make_unique<ComputePass>(std::move(execute_fn), pipeline_layout, pipeline);
+    } else {
+      return nullptr;
+    }
   }
 
  private:
-  const std::function<absl::Status(VkCommandBuffer)> execute_fn_;
-  VkPipeline vk_pipeline_{VK_NULL_HANDLE};
+  core::RefCountPtr<Device> device_;
+  std::unordered_map<VkShaderStageFlagBits, core::RefCountPtr<ShaderModule>> shader_modules_;
+
+  std::unordered_map<uint32_t, core::RefCountPtr<DescriptorSetLayout>> descriptor_set_layouts_;
+
+  std::unordered_map<uint32_t, std::unordered_map<uint32_t, VkDescriptorSetLayoutBinding>>
+      buffer_descriptors_;
 };
 
 class RenderGraphImpl : public core::Inherit<RenderGraphImpl, RenderGraph> {
@@ -88,17 +164,13 @@ class RenderGraphImpl : public core::Inherit<RenderGraphImpl, RenderGraph> {
   explicit RenderGraphImpl(core::RefCountPtr<Device> device) : device_(device) {}
 
   absl::Status add_pass(std::string name, std::function<absl::Status(PassBuilder *)> setup_fn,
-                        std::function<absl::Status(VkCommandBuffer)> execute_fn) override {
+                        std::function<absl::Status(Context *)> execute_fn) override {
     PassBuilderImpl builder(device_);
     LANCE_RETURN_IF_FAILED(setup_fn(&builder));
 
-    if (builder.is_compute_pass()) {
-      LANCE_ASSIGN_OR_RETURN(pipeline_layout, builder.create_pipeline_layout());
+    LANCE_ASSIGN_OR_RETURN(pass, builder.create_pass(std::move(execute_fn)));
 
-      LANCE_ASSIGN_OR_RETURN(pipeline, builder.create_compute_pipeline(pipeline_layout));
-
-      passes_.push_back(std::make_unique<ComputePass>(execute_fn, pipeline));
-    }
+    passes_.push_back(std::move(pass));
 
     return absl::OkStatus();
   }
@@ -119,7 +191,6 @@ class RenderGraphImpl : public core::Inherit<RenderGraphImpl, RenderGraph> {
   core::RefCountPtr<Device> device_;
 
   std::vector<std::unique_ptr<Pass>> passes_;
-  std::vector<std::unique_ptr<PassBuilderImpl>> pass_builders_;
 };
 
 }  // namespace

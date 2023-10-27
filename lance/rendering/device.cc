@@ -159,5 +159,26 @@ ShaderModule::~ShaderModule() {
   }
 }
 
+absl::StatusOr<core::RefCountPtr<DescriptorSetLayout>> DescriptorSetLayout::create(
+    const core::RefCountPtr<Device> &device,
+    absl::Span<const VkDescriptorSetLayoutBinding> bindings) {
+  VkDescriptorSetLayoutCreateInfo descriptor_set_layout_create_info = {};
+  descriptor_set_layout_create_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+  descriptor_set_layout_create_info.bindingCount = bindings.size();
+  descriptor_set_layout_create_info.pBindings = bindings.data();
+
+  VkDescriptorSetLayout vk_descriptor_set_layout;
+  VK_RETURN_IF_FAILED(VkApi::get()->vkCreateDescriptorSetLayout(
+      device->vk_device(), &descriptor_set_layout_create_info, nullptr, &vk_descriptor_set_layout));
+
+  return core::make_refcounted<DescriptorSetLayout>(device, vk_descriptor_set_layout);
+}
+
+DescriptorSetLayout::~DescriptorSetLayout() {
+  if (vk_descriptor_set_layout_) {
+    VkApi::get()->vkDestroyDescriptorSetLayout(device_->vk_device(), vk_descriptor_set_layout_,
+                                               nullptr);
+  }
+}
 }  // namespace rendering
 }  // namespace lance

@@ -89,6 +89,25 @@ class ShaderModule : public core::Inherit<ShaderModule, core::Object> {
   VkShaderModule vk_shader_module_{VK_NULL_HANDLE};
 };
 
+class DescriptorSetLayout : public core::Inherit<DescriptorSetLayout, core::Object> {
+ public:
+  static absl::StatusOr<core::RefCountPtr<DescriptorSetLayout>> create(
+      const core::RefCountPtr<Device>& device,
+      absl::Span<const VkDescriptorSetLayoutBinding> bindings);
+
+  DescriptorSetLayout(core::RefCountPtr<Device> device,
+                      VkDescriptorSetLayout vk_descriptor_set_layout)
+      : device_(device), vk_descriptor_set_layout_(vk_descriptor_set_layout) {}
+
+  ~DescriptorSetLayout();
+
+  VkDescriptorSetLayout vk_descriptor_set_layout() const { return vk_descriptor_set_layout_; }
+
+ private:
+  core::RefCountPtr<Device> device_;
+  VkDescriptorSetLayout vk_descriptor_set_layout_{VK_NULL_HANDLE};
+};
+
 class Pipeline : public core::Inherit<Pipeline, core::Object> {};
 
 }  // namespace rendering

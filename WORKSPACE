@@ -76,3 +76,9 @@ http_archive(
     strip_prefix = "glslang-13.1.1",
     urls = ["https://github.com/KhronosGroup/glslang/archive/refs/tags/13.1.1.tar.gz"],
 )
+
+new_local_repository(
+    name = "renderdoc_app",
+    build_file = "//third_party:renderdoc_app.BUILD",
+    path = "third_party/renderdoc_app",
+)

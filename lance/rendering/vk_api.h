@@ -45,6 +45,7 @@ class VkApi {
   VK_API_DEFINE(vkDestroyDescriptorSetLayout);
   VK_API_DEFINE(vkCmdPushConstants);
   VK_API_DEFINE(vkDestroyPipeline);
+  VK_API_DEFINE(vkDestroyPipelineLayout);
   VK_API_DEFINE(vkCreateCommandPool);
   VK_API_DEFINE(vkDestroyCommandPool);
   VK_API_DEFINE(vkAllocateCommandBuffers);
@@ -53,6 +54,9 @@ class VkApi {
   VK_API_DEFINE(vkEndCommandBuffer);
   VK_API_DEFINE(vkGetDeviceQueue);
   VK_API_DEFINE(vkQueueSubmit);
+  VK_API_DEFINE(vkCreateFence);
+  VK_API_DEFINE(vkDestroyFence);
+  VK_API_DEFINE(vkWaitForFences);
 
 #undef VK_API_DEFINE
 

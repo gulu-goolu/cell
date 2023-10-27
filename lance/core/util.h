@@ -166,3 +166,11 @@ inline auto on_scope_exited(Fn&& fn) -> decltype(auto) {
 
 #define LANCE_ON_SCOPE_EXIT(EXPR) \
   auto LANCE_CONCAT(scoped_guard_, __LINE__) = ::lance::core::on_scope_exited((EXPR))
+
+#define LANCE_THROW_IF_FAILED(EXPR)                    \
+  do {                                                 \
+    auto LANCE_CONCAT(status, __LINE__) = (EXPR);      \
+    if (!LANCE_CONCAT(status, __LINE__).ok()) {        \
+      throw LANCE_CONCAT(status, __LINE__).ToString(); \
+    }                                                  \
+  } while (false)

@@ -170,6 +170,15 @@ absl::StatusOr<uint32_t> Device::find_queue_family_index(VkQueueFlags flags) con
 
 absl::Status Device::submit(uint32_t queue_family_index,
                             absl::Span<const VkCommandBuffer> vk_command_buffers) {
+  VkFenceCreateInfo fence_create_info = {};
+  fence_create_info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+
+  VkFence vk_fence{VK_NULL_HANDLE};
+  VK_RETURN_IF_FAILED(
+      VkApi::get()->vkCreateFence(vk_device_, &fence_create_info, nullptr, &vk_fence));
+
+  LANCE_ON_SCOPE_EXIT([&]() { VkApi::get()->vkDestroyFence(vk_device_, vk_fence, nullptr); });
+
   VkQueue vk_queue{VK_NULL_HANDLE};
   VkApi::get()->vkGetDeviceQueue(vk_device_, queue_family_index, 0, &vk_queue);
 
@@ -177,7 +186,9 @@ absl::Status Device::submit(uint32_t queue_family_index,
   submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
   submit_info.commandBufferCount = vk_command_buffers.size();
   submit_info.pCommandBuffers = vk_command_buffers.data();
-  VK_RETURN_IF_FAILED(VkApi::get()->vkQueueSubmit(vk_queue, 1, &submit_info, VK_NULL_HANDLE));
+  VK_RETURN_IF_FAILED(VkApi::get()->vkQueueSubmit(vk_queue, 1, &submit_info, vk_fence));
+
+  VK_RETURN_IF_FAILED(VkApi::get()->vkWaitForFences(vk_device_, 1, &vk_fence, VK_TRUE, UINT64_MAX));
 
   return absl::OkStatus();
 }
@@ -219,6 +230,12 @@ DescriptorSetLayout::~DescriptorSetLayout() {
   if (vk_descriptor_set_layout_) {
     VkApi::get()->vkDestroyDescriptorSetLayout(device_->vk_device(), vk_descriptor_set_layout_,
                                                nullptr);
+  }
+}
+
+PipelineLayout::~PipelineLayout() {
+  if (vk_pipeline_layout_) {
+    VkApi::get()->vkDestroyPipelineLayout(device_->vk_device(), vk_pipeline_layout_, nullptr);
   }
 }
 

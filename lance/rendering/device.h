@@ -117,6 +117,20 @@ class DescriptorSetLayout : public core::Inherit<DescriptorSetLayout, core::Obje
   VkDescriptorSetLayout vk_descriptor_set_layout_{VK_NULL_HANDLE};
 };
 
+class PipelineLayout : public core::Inherit<PipelineLayout, core::Object> {
+ public:
+  PipelineLayout(core::RefCountPtr<Device> device, VkPipelineLayout vk_pipeline_layout)
+      : device_(device), vk_pipeline_layout_(vk_pipeline_layout) {}
+
+  ~PipelineLayout();
+
+  VkPipelineLayout vk_pipeline_layout() const { return vk_pipeline_layout_; }
+
+ private:
+  core::RefCountPtr<Device> device_;
+  VkPipelineLayout vk_pipeline_layout_{VK_NULL_HANDLE};
+};
+
 class Pipeline : public core::Inherit<Pipeline, core::Object> {
  public:
   Pipeline(core::RefCountPtr<Device> device, VkPipeline vk_pipeline)

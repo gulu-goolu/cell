@@ -87,6 +87,7 @@ VkApi::VkApi() {
   VK_API_LOAD(vkDestroyDescriptorSetLayout);
   VK_API_LOAD(vkCmdPushConstants);
   VK_API_LOAD(vkDestroyPipeline);
+  VK_API_LOAD(vkDestroyPipelineLayout);
   VK_API_LOAD(vkCreateCommandPool);
   VK_API_LOAD(vkDestroyCommandPool);
   VK_API_LOAD(vkAllocateCommandBuffers);
@@ -95,6 +96,9 @@ VkApi::VkApi() {
   VK_API_LOAD(vkEndCommandBuffer);
   VK_API_LOAD(vkGetDeviceQueue);
   VK_API_LOAD(vkQueueSubmit);
+  VK_API_LOAD(vkCreateFence);
+  VK_API_LOAD(vkDestroyFence);
+  VK_API_LOAD(vkWaitForFences);
 
 #undef VK_API_LOAD
 }

@@ -88,14 +88,13 @@ class PassBuilderImpl : public PassBuilder {
   }
 
   absl::StatusOr<VkPipelineLayout> create_pipeline_layout() const {
-    uint32_t max_binding = 0;
-    for (const auto &pair : descriptor_set_layouts_) {
-      max_binding = std::max<uint32_t>(pair.first, max_binding);
-    }
-
     std::vector<VkDescriptorSetLayout> set_layouts;
-    set_layouts.resize(max_binding + 1, VK_NULL_HANDLE);
+    set_layouts.resize(descriptor_set_layouts_.size(), VK_NULL_HANDLE);
     for (const auto &pair : descriptor_set_layouts_) {
+      if (pair.first >= descriptor_set_layouts_.size()) {
+        return absl::InvalidArgumentError(absl::StrFormat("out of bound, set: %d", pair.first));
+      }
+
       set_layouts[pair.first] = pair.second->vk_descriptor_set_layout();
     }
 

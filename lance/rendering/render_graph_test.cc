@@ -1,6 +1,7 @@
 #include "render_graph.h"
 
 #include "device.h"
+#include "glog/logging.h"
 #include "gtest/gtest.h"
 #include "shader_compiler.h"
 #include "util.h"
@@ -16,6 +17,7 @@ TEST(render_graph, compute) {
 
   uint32_t compute_queue_family_index =
       device->find_queue_family_index(VK_QUEUE_COMPUTE_BIT).value();
+  LOG(INFO) << "compute_queue_family_index: " << compute_queue_family_index;
 
   auto command_pool = CommandPool::create(device, compute_queue_family_index).value();
 
@@ -31,9 +33,6 @@ TEST(render_graph, compute) {
   const char* add_shader = R"glsl(
 #version 450 core
 
-layout(set=0, binding=0) uniform Arguments {
-    vec4 v[];
-};
 
 void main() {
 
@@ -46,18 +45,19 @@ void main() {
   auto st_v1 = rg->add_pass(
       "Compute",
       [&shader_module, &descriptor_set_layout](PassBuilder* builder) -> absl::Status {
-        LANCE_RETURN_IF_FAILED(builder->set_descriptor_set_layout(0, descriptor_set_layout));
+        // LANCE_RETURN_IF_FAILED(builder->set_descriptor_set_layout(0, descriptor_set_layout));
 
         LANCE_RETURN_IF_FAILED(builder->set_compute_shader(shader_module));
 
         return absl::OkStatus();
       },
       [=](Context* ctx) -> absl::Status {
-        VkApi::get()->vkCmdBindDescriptorSets(ctx->vk_command_buffer(),
-                                              VK_PIPELINE_BIND_POINT_COMPUTE,
-                                              ctx->vk_pipeline_layout(), 0, 0, nullptr, 0, nullptr);
+        // VkApi::get()->vkCmdBindDescriptorSets(ctx->vk_command_buffer(),
+        //                                       VK_PIPELINE_BIND_POINT_COMPUTE,
+        //                                       ctx->vk_pipeline_layout(), 0, 0, nullptr, 0,
+        //                                       nullptr);
 
-        ctx->dispatch(65536, 65536, 65536);
+        ctx->dispatch(1024, 1024, 1024);
 
         return absl::OkStatus();
       });
@@ -69,8 +69,12 @@ void main() {
   auto command_buffer =
       command_pool->allocate_command_buffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY).value();
 
+  LANCE_THROW_IF_FAILED(command_buffer->begin());
+
   auto st_v3 = rg->execute(command_buffer->vk_command_buffer(), {});
   ASSERT_TRUE(st_v3.ok());
+
+  LANCE_THROW_IF_FAILED(command_buffer->end());
 
   render_doc_begin_capture();
 

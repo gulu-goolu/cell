@@ -1,6 +1,8 @@
 #include "device.h"
 
 #include "absl/strings/str_format.h"
+#include "absl/strings/str_join.h"
+#include "glog/logging.h"
 #include "lance/core/util.h"
 #include "vk_api.h"
 
@@ -41,9 +43,13 @@ absl::StatusOr<core::RefCountPtr<Instance>> Instance::create_for_3d() {
 #if defined(_WIN64)
     "VK_KHR_win32_surface"
 #endif
-
   };
-  return create({}, enabled_extensions);
+
+  const char *enabled_layers[] = {
+      "VK_LAYER_KHRONOS_validation",
+  };
+
+  return create(enabled_layers, enabled_extensions);
 }
 
 absl::StatusOr<std::vector<VkPhysicalDevice>> Instance::enumerate_physical_devices() const {
@@ -96,7 +102,7 @@ absl::StatusOr<core::RefCountPtr<Device>> Instance::create_device_for_graphics()
 
   VkDeviceQueueCreateInfo queue_create_info = {};
   queue_create_info.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-  queue_create_info.queueFamilyIndex = 1;
+  queue_create_info.queueFamilyIndex = graphics_queue_famil_index;
   queue_create_info.queueCount = 1;
   queue_create_info.pQueuePriorities = queue_priorities;
 
@@ -115,12 +121,18 @@ absl::StatusOr<core::RefCountPtr<Device>> Instance::create_device_for_graphics()
         absl::StrFormat("failed to create logic device, ret_code: %s", VkResult_name(ret_code)));
   }
 
-  return core::make_refcounted<Device>(this, target_device, logic_device);
+  return core::make_refcounted<Device>(this, target_device, logic_device,
+                                       absl::MakeConstSpan(&graphics_queue_famil_index, 1));
 }
 
 Device::Device(core::RefCountPtr<Instance> instance, VkPhysicalDevice vk_physical_device,
-               VkDevice vk_device)
-    : instance_(instance), vk_physical_device_(vk_physical_device), vk_device_(vk_device) {}
+               VkDevice vk_device, absl::Span<const uint32_t> queue_family_indices)
+    : instance_(instance),
+      vk_physical_device_(vk_physical_device),
+      vk_device_(vk_device),
+      queue_family_indices_(queue_family_indices.begin(), queue_family_indices.end()) {
+  LOG(INFO) << "queue_family_indices: [" << absl::StrJoin(queue_family_indices, ",") << "]";
+}
 
 Device::~Device() {
   if (vk_device_) {
@@ -147,7 +159,7 @@ absl::StatusOr<uint32_t> Device::find_queue_family_index(VkQueueFlags flags) con
       queue_family_props,
       VkApi::get()->get_physical_device_queue_family_properties(vk_physical_device_));
 
-  for (uint32_t i = 0; i < queue_family_props.size(); ++i) {
+  for (uint32_t i : queue_family_indices_) {
     if ((queue_family_props[i].queueFlags & flags) == flags) {
       return i;
     }

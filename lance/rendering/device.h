@@ -36,7 +36,7 @@ class Instance : public core::Inherit<Instance, core::Object> {
 class Device : public core::Inherit<Device, core::Object> {
  public:
   explicit Device(core::RefCountPtr<Instance> instance, VkPhysicalDevice vk_physical_device,
-                  VkDevice vk_device);
+                  VkDevice vk_device, absl::Span<const uint32_t> queue_family_indices);
 
   ~Device();
 
@@ -53,6 +53,7 @@ class Device : public core::Inherit<Device, core::Object> {
   core::RefCountPtr<Instance> instance_;
   VkPhysicalDevice vk_physical_device_{VK_NULL_HANDLE};
   VkDevice vk_device_{VK_NULL_HANDLE};
+  std::vector<uint32_t> queue_family_indices_;
 };
 
 class Image : public core::Inherit<Image, core::Object> {

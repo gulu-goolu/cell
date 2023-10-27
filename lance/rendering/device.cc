@@ -115,11 +115,12 @@ absl::StatusOr<core::RefCountPtr<Device>> Instance::create_device_for_graphics()
         absl::StrFormat("failed to create logic device, ret_code: %s", VkResult_name(ret_code)));
   }
 
-  return core::make_refcounted<Device>(this, logic_device);
+  return core::make_refcounted<Device>(this, target_device, logic_device);
 }
 
-Device::Device(core::RefCountPtr<Instance> instance, VkDevice vk_device)
-    : instance_(instance), vk_device_(vk_device) {}
+Device::Device(core::RefCountPtr<Instance> instance, VkPhysicalDevice vk_physical_device,
+               VkDevice vk_device)
+    : instance_(instance), vk_physical_device_(vk_physical_device), vk_device_(vk_device) {}
 
 Device::~Device() {
   if (vk_device_) {
@@ -139,6 +140,34 @@ absl::StatusOr<core::RefCountPtr<ShaderModule>> Device::create_shader_module(
                                                          nullptr, &vk_shader_module));
 
   return core::make_refcounted<ShaderModule>(this, vk_shader_module);
+}
+
+absl::StatusOr<uint32_t> Device::find_queue_family_index(VkQueueFlags flags) const {
+  LANCE_ASSIGN_OR_RETURN(
+      queue_family_props,
+      VkApi::get()->get_physical_device_queue_family_properties(vk_physical_device_));
+
+  for (uint32_t i = 0; i < queue_family_props.size(); ++i) {
+    if ((queue_family_props[i].queueFlags & flags) == flags) {
+      return i;
+    }
+  }
+
+  return absl::NotFoundError("no suitable queue found");
+}
+
+absl::Status Device::submit(uint32_t queue_family_index,
+                            absl::Span<const VkCommandBuffer> vk_command_buffers) {
+  VkQueue vk_queue{VK_NULL_HANDLE};
+  VkApi::get()->vkGetDeviceQueue(vk_device_, queue_family_index, 0, &vk_queue);
+
+  VkSubmitInfo submit_info = {};
+  submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+  submit_info.commandBufferCount = vk_command_buffers.size();
+  submit_info.pCommandBuffers = vk_command_buffers.data();
+  VK_RETURN_IF_FAILED(VkApi::get()->vkQueueSubmit(vk_queue, 1, &submit_info, VK_NULL_HANDLE));
+
+  return absl::OkStatus();
 }
 
 Image::~Image() {
@@ -179,6 +208,68 @@ DescriptorSetLayout::~DescriptorSetLayout() {
     VkApi::get()->vkDestroyDescriptorSetLayout(device_->vk_device(), vk_descriptor_set_layout_,
                                                nullptr);
   }
+}
+
+Pipeline::~Pipeline() {
+  if (vk_pipeline_) {
+    VkApi::get()->vkDestroyPipeline(device_->vk_device(), vk_pipeline_, nullptr);
+  }
+}
+
+absl::StatusOr<core::RefCountPtr<CommandPool>> CommandPool::create(
+    const core::RefCountPtr<Device> &device, uint32_t queue_family_index) {
+  VkCommandPoolCreateInfo command_pool_create_info = {};
+  command_pool_create_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+  command_pool_create_info.queueFamilyIndex = queue_family_index;
+
+  VkCommandPool vk_command_pool{VK_NULL_HANDLE};
+  VK_RETURN_IF_FAILED(VkApi::get()->vkCreateCommandPool(
+      device->vk_device(), &command_pool_create_info, nullptr, &vk_command_pool));
+
+  return core::make_refcounted<CommandPool>(device, vk_command_pool);
+}
+
+CommandPool::~CommandPool() {
+  if (vk_command_pool_) {
+    VkApi::get()->vkDestroyCommandPool(device_->vk_device(), vk_command_pool_, nullptr);
+  }
+}
+
+absl::StatusOr<core::RefCountPtr<CommandBuffer>> CommandPool::allocate_command_buffer(
+    VkCommandBufferLevel level) {
+  VkCommandBufferAllocateInfo command_buffer_allocate_info = {};
+  command_buffer_allocate_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+  command_buffer_allocate_info.commandPool = vk_command_pool_;
+  command_buffer_allocate_info.commandBufferCount = 1;
+  command_buffer_allocate_info.level = level;
+
+  VkCommandBuffer vk_command_buffer{VK_NULL_HANDLE};
+  VK_RETURN_IF_FAILED(VkApi::get()->vkAllocateCommandBuffers(
+      device_->vk_device(), &command_buffer_allocate_info, &vk_command_buffer));
+
+  return core::make_refcounted<CommandBuffer>(this, vk_command_buffer);
+}
+
+CommandBuffer::~CommandBuffer() {
+  if (vk_command_buffer_) {
+    VkApi::get()->vkFreeCommandBuffers(command_pool_->device()->vk_device(),
+                                       command_pool_->vk_command_pool(), 1, &vk_command_buffer_);
+  }
+}
+
+absl::Status CommandBuffer::begin() {
+  VkCommandBufferBeginInfo command_buffer_begin_info = {};
+  command_buffer_begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+  VK_RETURN_IF_FAILED(
+      VkApi::get()->vkBeginCommandBuffer(vk_command_buffer_, &command_buffer_begin_info));
+
+  return absl::OkStatus();
+}
+
+absl::Status CommandBuffer::end() {
+  VK_RETURN_IF_FAILED(VkApi::get()->vkEndCommandBuffer(vk_command_buffer_));
+
+  return absl::OkStatus();
 }
 }  // namespace rendering
 }  // namespace lance

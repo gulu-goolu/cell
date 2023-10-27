@@ -3,6 +3,7 @@
 #include "device.h"
 #include "gtest/gtest.h"
 #include "shader_compiler.h"
+#include "util.h"
 #include "vk_api.h"
 
 namespace lance {
@@ -12,6 +13,11 @@ TEST(render_graph, compute) {
   auto instance = Instance::create_for_3d().value();
 
   auto device = instance->create_device_for_graphics().value();
+
+  uint32_t compute_queue_family_index =
+      device->find_queue_family_index(VK_QUEUE_COMPUTE_BIT).value();
+
+  auto command_pool = CommandPool::create(device, compute_queue_family_index).value();
 
   VkDescriptorSetLayoutBinding bindings = {};
   bindings.binding = 0;
@@ -51,13 +57,27 @@ void main() {
                                               VK_PIPELINE_BIND_POINT_COMPUTE,
                                               ctx->vk_pipeline_layout(), 0, 0, nullptr, 0, nullptr);
 
-        VkApi::get()->vkCmdDispatch(ctx->vk_command_buffer(), 0, 0, 0);
+        ctx->dispatch(65536, 65536, 65536);
+
         return absl::OkStatus();
       });
   ASSERT_TRUE(st_v1.ok());
 
   auto st_v2 = rg->compile();
   ASSERT_TRUE(st_v2.ok());
+
+  auto command_buffer =
+      command_pool->allocate_command_buffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY).value();
+
+  auto st_v3 = rg->execute(command_buffer->vk_command_buffer(), {});
+  ASSERT_TRUE(st_v3.ok());
+
+  render_doc_begin_capture();
+
+  auto st_v4 = device->submit(compute_queue_family_index, {command_buffer->vk_command_buffer()});
+  ASSERT_TRUE(st_v4.ok());
+
+  render_doc_end_capture();
 }
 }  // namespace rendering
 }  // namespace lance

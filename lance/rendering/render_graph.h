@@ -40,6 +40,10 @@ class Context {
   virtual VkCommandBuffer vk_command_buffer() const = 0;
   virtual VkPipeline vk_pipeline() const = 0;
   virtual VkPipelineLayout vk_pipeline_layout() const = 0;
+
+  void push_constants(VkShaderStageFlags stage, uint32_t offset, uint32_t size, const void* values);
+
+  void dispatch(uint32_t group_count_x, uint32_t group_count_y, uint32_t group_count_z);
 };
 
 class RenderGraph : public core::Inherit<RenderGraph, core::Object> {

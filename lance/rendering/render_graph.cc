@@ -17,13 +17,11 @@ class Pass {
 class ComputePass : public Pass {
  public:
   ComputePass(std::function<absl::Status(Context *)> execute_fn,
-              VkPipelineLayout vk_pipeline_layout, VkPipeline vk_pipeline)
-      : execute_fn_(execute_fn),
-        vk_pipeline_layout_(vk_pipeline_layout),
-        vk_pipeline_(vk_pipeline) {}
+              VkPipelineLayout vk_pipeline_layout, core::RefCountPtr<Pipeline> pipeline)
+      : execute_fn_(execute_fn), vk_pipeline_layout_(vk_pipeline_layout), pipeline_(pipeline) {}
 
   absl::Status execute(VkCommandBuffer cmd) override {
-    VkApi::get()->vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, vk_pipeline_);
+    VkApi::get()->vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline_->vk_pipeline());
 
     class ContextImpl : public Context {
      public:
@@ -31,7 +29,7 @@ class ComputePass : public Pass {
           : pass_(pass), vk_command_buffer_(vk_command_buffer) {}
 
       VkCommandBuffer vk_command_buffer() const override { return vk_command_buffer_; }
-      VkPipeline vk_pipeline() const override { return pass_->vk_pipeline_; }
+      VkPipeline vk_pipeline() const override { return pass_->pipeline_->vk_pipeline(); }
       VkPipelineLayout vk_pipeline_layout() const override { return pass_->vk_pipeline_layout_; }
 
      private:
@@ -46,7 +44,7 @@ class ComputePass : public Pass {
  private:
   const std::function<absl::Status(Context *)> execute_fn_;
   VkPipelineLayout vk_pipeline_layout_{VK_NULL_HANDLE};
-  VkPipeline vk_pipeline_{VK_NULL_HANDLE};
+  core::RefCountPtr<Pipeline> pipeline_;
 };
 
 class PassBuilderImpl : public PassBuilder {
@@ -113,7 +111,8 @@ class PassBuilderImpl : public PassBuilder {
     return vk_pipeline_layout;
   }
 
-  absl::StatusOr<VkPipeline> create_compute_pipeline(VkPipelineLayout vk_pipeline_layout) const {
+  absl::StatusOr<core::RefCountPtr<Pipeline>> create_compute_pipeline(
+      VkPipelineLayout vk_pipeline_layout) const {
     auto it = shader_modules_.find(VK_SHADER_STAGE_COMPUTE_BIT);
     if (it == shader_modules_.end()) {
       return absl::NotFoundError("compute shader not found");
@@ -133,7 +132,7 @@ class PassBuilderImpl : public PassBuilder {
     VK_RETURN_IF_FAILED(VkApi::get()->vkCreateComputePipelines(
         device_->vk_device(), VK_NULL_HANDLE, 1, &pipeline_create_info, nullptr, &vk_pipeline));
 
-    return vk_pipeline;
+    return core::make_refcounted<Pipeline>(device_, vk_pipeline);
   }
 
   absl::StatusOr<std::unique_ptr<Pass>> create_pass(
@@ -194,6 +193,16 @@ class RenderGraphImpl : public core::Inherit<RenderGraphImpl, RenderGraph> {
 };
 
 }  // namespace
+
+void Context::push_constants(VkShaderStageFlags stage, uint32_t offset, uint32_t size,
+                             const void *values) {
+  VkApi::get()->vkCmdPushConstants(vk_command_buffer(), vk_pipeline_layout(), stage, offset, size,
+                                   values);
+}
+
+void Context::dispatch(uint32_t group_count_x, uint32_t group_count_y, uint32_t group_count_z) {
+  VkApi::get()->vkCmdDispatch(vk_command_buffer(), group_count_x, group_count_y, group_count_z);
+}
 
 absl::StatusOr<core::RefCountPtr<RenderGraph>> create_render_graph(
     core::RefCountPtr<Device> device) {

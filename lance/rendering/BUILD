@@ -4,12 +4,14 @@ cc_library(
         "device.cc",
         "render_graph.cc",
         "shader_compiler.cc",
+        "util.cc",
         "vk_api.cc",
     ],
     hdrs = [
         "device.h",
         "render_graph.h",
         "shader_compiler.h",
+        "util.h",
         "vk_api.h",
     ],
     visibility = ["//visibility:public"],
@@ -20,6 +22,7 @@ cc_library(
         "@com_google_absl//absl/strings:str_format",
         "@com_google_absl//absl/types:span",
         "@glslang",
+        "@renderdoc_app",
         "@vulkan_headers",
     ],
 )

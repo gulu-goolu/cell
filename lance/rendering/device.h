@@ -10,6 +10,7 @@ namespace lance {
 namespace rendering {
 class Device;
 class ShaderModule;
+class CommandBuffer;
 
 class Instance : public core::Inherit<Instance, core::Object> {
  public:
@@ -34,7 +35,8 @@ class Instance : public core::Inherit<Instance, core::Object> {
 
 class Device : public core::Inherit<Device, core::Object> {
  public:
-  explicit Device(core::RefCountPtr<Instance> instance, VkDevice vk_device);
+  explicit Device(core::RefCountPtr<Instance> instance, VkPhysicalDevice vk_physical_device,
+                  VkDevice vk_device);
 
   ~Device();
 
@@ -42,8 +44,14 @@ class Device : public core::Inherit<Device, core::Object> {
 
   absl::StatusOr<core::RefCountPtr<ShaderModule>> create_shader_module(const core::Blob* blob);
 
+  absl::StatusOr<uint32_t> find_queue_family_index(VkQueueFlags flags) const;
+
+  absl::Status submit(uint32_t queue_family_index,
+                      absl::Span<const VkCommandBuffer> vk_command_buffers);
+
  private:
   core::RefCountPtr<Instance> instance_;
+  VkPhysicalDevice vk_physical_device_{VK_NULL_HANDLE};
   VkDevice vk_device_{VK_NULL_HANDLE};
 };
 
@@ -108,7 +116,58 @@ class DescriptorSetLayout : public core::Inherit<DescriptorSetLayout, core::Obje
   VkDescriptorSetLayout vk_descriptor_set_layout_{VK_NULL_HANDLE};
 };
 
-class Pipeline : public core::Inherit<Pipeline, core::Object> {};
+class Pipeline : public core::Inherit<Pipeline, core::Object> {
+ public:
+  Pipeline(core::RefCountPtr<Device> device, VkPipeline vk_pipeline)
+      : device_(device), vk_pipeline_(vk_pipeline) {}
+
+  ~Pipeline();
+
+  VkPipeline vk_pipeline() const { return vk_pipeline_; }
+
+ private:
+  core::RefCountPtr<Device> device_;
+  VkPipeline vk_pipeline_{VK_NULL_HANDLE};
+};
+
+class CommandPool : public core::Inherit<CommandPool, core::Object> {
+ public:
+  static absl::StatusOr<core::RefCountPtr<CommandPool>> create(
+      const core::RefCountPtr<Device>& device, uint32_t queue_family_index);
+
+  CommandPool(core::RefCountPtr<Device> device, VkCommandPool vk_command_pool)
+      : device_(device), vk_command_pool_(vk_command_pool) {}
+
+  ~CommandPool();
+
+  const core::RefCountPtr<Device>& device() const { return device_; }
+
+  VkCommandPool vk_command_pool() const { return vk_command_pool_; }
+
+  absl::StatusOr<core::RefCountPtr<CommandBuffer>> allocate_command_buffer(
+      VkCommandBufferLevel level);
+
+ private:
+  core::RefCountPtr<Device> device_;
+  VkCommandPool vk_command_pool_{VK_NULL_HANDLE};
+};
+
+class CommandBuffer : public core::Inherit<CommandBuffer, core::Object> {
+ public:
+  CommandBuffer(core::RefCountPtr<CommandPool> command_pool, VkCommandBuffer vk_command_buffer)
+      : command_pool_(command_pool), vk_command_buffer_(vk_command_buffer) {}
+
+  ~CommandBuffer();
+
+  VkCommandBuffer vk_command_buffer() const { return vk_command_buffer_; }
+
+  absl::Status begin();
+  absl::Status end();
+
+ private:
+  core::RefCountPtr<CommandPool> command_pool_;
+  VkCommandBuffer vk_command_buffer_{VK_NULL_HANDLE};
+};
 
 }  // namespace rendering
 }  // namespace lance

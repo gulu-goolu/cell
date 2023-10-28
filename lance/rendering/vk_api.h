@@ -52,6 +52,7 @@ class VkApi {
   VK_API_DEFINE(vkCmdBindVertexBuffers);
   VK_API_DEFINE(vkCmdBindPipeline);
   VK_API_DEFINE(vkCreateComputePipelines);
+  VK_API_DEFINE(vkCreateGraphicsPipelines);
   VK_API_DEFINE(vkCreatePipelineLayout);
   VK_API_DEFINE(vkCreateDescriptorSetLayout);
   VK_API_DEFINE(vkDestroyDescriptorSetLayout);
@@ -76,6 +77,8 @@ class VkApi {
   VK_API_DEFINE(vkCmdBeginRenderPass);
   VK_API_DEFINE(vkCmdEndRenderPass);
   VK_API_DEFINE(vkCmdNextSubpass);
+  VK_API_DEFINE(vkCmdSetViewport);
+  VK_API_DEFINE(vkCmdSetScissor);
 
 #undef VK_API_DEFINE
 

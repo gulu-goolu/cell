@@ -92,8 +92,11 @@ class GraphicsPassBuilderImpl : public GraphicsPassBuilder {
     return this;
   }
 
-  GraphicsPassBuilder *set_depth_stencil_attachment(const std::string &id) override {
-    depth_stencil_attachment_id = id;
+  GraphicsPassBuilder *set_depth_stencil_attachment(const std::string &id,
+                                                    bool depth_test_enable) override {
+    depth_stencil_attachment = std::make_unique<DepthStencilAttachment>();
+    depth_stencil_attachment->id = id;
+    depth_stencil_attachment->depth_test_enable = depth_test_enable;
 
     return this;
   }
@@ -101,6 +104,24 @@ class GraphicsPassBuilderImpl : public GraphicsPassBuilder {
   GraphicsPassBuilder *set_viewport(float x, float y, float width, float height, float min_depth,
                                     float max_depth) override {
     viewport = std::make_unique<VkViewport>(VkViewport{x, y, width, height, min_depth, max_depth});
+
+    return this;
+  }
+
+  GraphicsPassBuilder *set_cull_mode(VkCullModeFlagBits _cull_mode) override {
+    cull_mode = _cull_mode;
+
+    return this;
+  }
+
+  GraphicsPassBuilder *set_front_face(VkFrontFace _front_face) override {
+    front_face = _front_face;
+
+    return this;
+  }
+
+  GraphicsPassBuilder *set_polygon_mode(VkPolygonMode mode) override {
+    polygon_mode = mode;
 
     return this;
   }
@@ -134,6 +155,14 @@ class GraphicsPassBuilderImpl : public GraphicsPassBuilder {
     return this;
   }
 
+  GraphicsPassBuilder *set_shader_by_glsl(VkShaderStageFlagBits stage,
+                                          const char *source) override {
+    auto shader = device->create_shader_from_source(stage, source);
+    CHECK(shader.ok()) << "err_msg: " << shader.status().message();
+
+    return set_shader(stage, shader.value());
+  }
+
   absl::StatusOr<core::RefCountPtr<PipelineLayout>> create_pipeline_layout() const {
     std::vector<VkDescriptorSetLayout> set_layouts;
     set_layouts.resize(descriptor_set_layouts.size(), VK_NULL_HANDLE);
@@ -158,6 +187,12 @@ class GraphicsPassBuilderImpl : public GraphicsPassBuilder {
     return core::make_refcounted<PipelineLayout>(device, vk_pipeline_layout);
   }
 
+  absl::StatusOr<std::vector<VkPipelineColorBlendAttachmentState>>
+  create_color_blend_attachment_states() const {
+    std::vector<VkPipelineColorBlendAttachmentState> states;
+    return states;
+  }
+
   absl::StatusOr<core::RefCountPtr<Pipeline>> create_pipeline(
       const core::RefCountPtr<PipelineLayout> &pipeline_layout,
       const core::RefCountPtr<RenderPass> &render_pass, uint32_t subpass) const {
@@ -170,6 +205,8 @@ class GraphicsPassBuilderImpl : public GraphicsPassBuilder {
       shader_stage_create_info.pName = "main";
       shader_stage_create_infos.push_back(shader_stage_create_info);
     }
+
+    std::vector<VkDynamicState> dynamic_states;
 
     VkGraphicsPipelineCreateInfo graphics_pipeline_create_info = {};
     graphics_pipeline_create_info.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
@@ -193,10 +230,105 @@ class GraphicsPassBuilderImpl : public GraphicsPassBuilder {
 
     graphics_pipeline_create_info.pInputAssemblyState = &input_assembly_state;
 
+    //
+    graphics_pipeline_create_info.pTessellationState = nullptr;
+
+    //
+    VkPipelineViewportStateCreateInfo viewport_state = {};
+    viewport_state.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+
+    std::vector<VkViewport> viewports;
+    if (viewport) {
+      viewports.push_back(*viewport);
+    } else {
+      dynamic_states.push_back(VK_DYNAMIC_STATE_VIEWPORT);
+    }
+    viewport_state.viewportCount = viewports.size();
+    viewport_state.pViewports = viewports.data();
+
+    std::vector<VkRect2D> scissors;
+    if (scissor) {
+      scissors.push_back(*scissor);
+    } else {
+      dynamic_states.push_back(VK_DYNAMIC_STATE_SCISSOR);
+    }
+    viewport_state.scissorCount = scissors.size();
+    viewport_state.pScissors = scissors.data();
+
+    graphics_pipeline_create_info.pViewportState = &viewport_state;
+
+    VkPipelineRasterizationStateCreateInfo rasterization_state = {};
+    rasterization_state.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+    rasterization_state.depthClampEnable = VK_FALSE;
+    rasterization_state.rasterizerDiscardEnable = VK_FALSE;
+    rasterization_state.cullMode = cull_mode;
+    rasterization_state.polygonMode = polygon_mode;
+    rasterization_state.frontFace = front_face;
+    rasterization_state.depthBiasEnable = VK_FALSE;
+    rasterization_state.lineWidth = 1.0f;
+
+    graphics_pipeline_create_info.pRasterizationState = &rasterization_state;
+
+    VkPipelineMultisampleStateCreateInfo multisample_state = {};
+    multisample_state.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+    multisample_state.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+    multisample_state.pSampleMask = nullptr;
+    multisample_state.sampleShadingEnable = VK_FALSE;
+    multisample_state.alphaToCoverageEnable = VK_FALSE;
+    multisample_state.alphaToOneEnable = VK_FALSE;
+
+    graphics_pipeline_create_info.pMultisampleState = &multisample_state;
+
+    VkPipelineDepthStencilStateCreateInfo depth_stencil_state = {};
+    depth_stencil_state.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+    depth_stencil_state.depthTestEnable = VK_FALSE;
+    depth_stencil_state.depthWriteEnable = VK_TRUE;
+    depth_stencil_state.depthCompareOp = VK_COMPARE_OP_ALWAYS;
+    depth_stencil_state.depthBoundsTestEnable = VK_FALSE;
+    depth_stencil_state.stencilTestEnable = VK_FALSE;
+    depth_stencil_state.minDepthBounds = 0.f;
+    depth_stencil_state.maxDepthBounds = 1.f;
+
+    if (depth_stencil_attachment) {
+      depth_stencil_state.depthTestEnable = depth_stencil_attachment->depth_test_enable;
+    }
+
+    graphics_pipeline_create_info.pDepthStencilState = &depth_stencil_state;
+
+    LANCE_ASSIGN_OR_RETURN(blend_attachment_states, create_color_blend_attachment_states());
+
+    VkPipelineColorBlendStateCreateInfo color_blend_state = {};
+    color_blend_state.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+    color_blend_state.logicOpEnable = VK_FALSE;
+    color_blend_state.attachmentCount = blend_attachment_states.size();
+    color_blend_state.pAttachments = blend_attachment_states.data();
+    color_blend_state.blendConstants[0] = 1;
+    color_blend_state.blendConstants[1] = 1;
+    color_blend_state.blendConstants[2] = 1;
+    color_blend_state.blendConstants[3] = 1;
+
+    graphics_pipeline_create_info.pColorBlendState = &color_blend_state;
+
+    // dynamic state
+    VkPipelineDynamicStateCreateInfo dynamic_state_create_info = {};
+    dynamic_state_create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+    dynamic_state_create_info.dynamicStateCount = dynamic_states.size();
+    dynamic_state_create_info.pDynamicStates = dynamic_states.data();
+
+    graphics_pipeline_create_info.pDynamicState = &dynamic_state_create_info;
+
+    graphics_pipeline_create_info.layout = pipeline_layout->vk_pipeline_layout();
+
     graphics_pipeline_create_info.renderPass = render_pass->vk_render_pass();
     graphics_pipeline_create_info.subpass = subpass;
 
-    return nullptr;
+    VkPipeline vk_pipeline{VK_NULL_HANDLE};
+    VK_RETURN_IF_FAILED(VkApi::get()->vkCreateGraphicsPipelines(device->vk_device(), VK_NULL_HANDLE,
+                                                                1, &graphics_pipeline_create_info,
+                                                                nullptr, &vk_pipeline));
+
+    return core::make_refcounted<GraphicsPipeline>(device, vk_pipeline, pipeline_layout,
+                                                   render_pass);
   }
 
   class GraphicsPipeline : public core::Inherit<GraphicsPipeline, Pipeline> {
@@ -220,9 +352,19 @@ class GraphicsPassBuilderImpl : public GraphicsPassBuilder {
 
   std::vector<std::string> color_attachment_ids;
 
-  std::string depth_stencil_attachment_id;
+  struct DepthStencilAttachment {
+    std::string id;
+
+    bool depth_test_enable = false;
+  };
+  std::unique_ptr<DepthStencilAttachment> depth_stencil_attachment;
 
   std::unique_ptr<VkViewport> viewport;
+  std::unique_ptr<VkRect2D> scissor;
+
+  VkCullModeFlagBits cull_mode = VK_CULL_MODE_NONE;
+  VkPolygonMode polygon_mode = VK_POLYGON_MODE_FILL;
+  VkFrontFace front_face = VK_FRONT_FACE_COUNTER_CLOCKWISE;
 
   std::unordered_map<uint32_t, core::RefCountPtr<DescriptorSetLayout>> descriptor_set_layouts;
   std::vector<VkPushConstantRange> push_constants;
@@ -342,7 +484,12 @@ class RenderGraphImpl : public core::Inherit<RenderGraphImpl, RenderGraph> {
  public:
   explicit RenderGraphImpl(core::RefCountPtr<Device> device) : device_(device) {}
 
-  absl::StatusOr<std::string> import_resource(core::RefCountPtr<Resource> resource) override {
+  absl::StatusOr<std::string> import_resource(
+      const std::string &name, const core::RefCountPtr<RenderGraphResource> &resource) override {
+    return absl::OkStatus();
+  }
+
+  absl::StatusOr<std::string> create_resource(const std::string &name) override {
     return absl::OkStatus();
   }
 
@@ -385,6 +532,8 @@ class RenderGraphImpl : public core::Inherit<RenderGraphImpl, RenderGraph> {
                                  std::function<absl::Status(Context *)> execute_fn) override {
     GraphicsPassBuilderImpl builder(device_);
 
+    LANCE_RETURN_IF_FAILED(setup_fn(&builder));
+
     return absl::OkStatus();
   }
 
@@ -392,7 +541,8 @@ class RenderGraphImpl : public core::Inherit<RenderGraphImpl, RenderGraph> {
 
   absl::Status execute(
       VkCommandBuffer command_buffer,
-      absl::Span<const std::pair<std::string, core::RefCountPtr<Resource>>> inputs) override {
+      absl::Span<const std::pair<std::string, core::RefCountPtr<RenderGraphResource>>> inputs)
+      override {
     for (auto &pass : passes_) {
       LANCE_RETURN_IF_FAILED(pass->execute(command_buffer));
     }
@@ -401,6 +551,8 @@ class RenderGraphImpl : public core::Inherit<RenderGraphImpl, RenderGraph> {
   }
 
  private:
+  std::unordered_map<std::string, std::string> resources_;
+
   core::RefCountPtr<Device> device_;
 
   std::vector<std::unique_ptr<Pass>> passes_;
@@ -422,6 +574,16 @@ void Context::draw(uint32_t vertex_count, uint32_t instance_count, uint32_t firs
                    uint32_t first_instance) {
   VkApi::get()->vkCmdDraw(vk_command_buffer(), vertex_count, instance_count, first_vertex,
                           first_instance);
+}
+
+void Context::set_viewport(uint32_t first_viewport, absl::Span<const VkViewport> viewports) {
+  VkApi::get()->vkCmdSetViewport(vk_command_buffer(), first_viewport, viewports.size(),
+                                 viewports.data());
+}
+
+void Context::set_scissors(uint32_t first_scissor, absl::Span<const VkRect2D> scissors) {
+  VkApi::get()->vkCmdSetScissor(vk_command_buffer(), first_scissor, scissors.size(),
+                                scissors.data());
 }
 
 absl::StatusOr<core::RefCountPtr<RenderGraph>> create_render_graph(

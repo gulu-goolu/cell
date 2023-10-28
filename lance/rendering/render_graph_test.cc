@@ -94,12 +94,36 @@ TEST(render_graph, graphics) {
 
   auto rg = create_render_graph(test_device()).value();
 
+  auto color0 = rg->create_resource("color0").value();
+
   LANCE_THROW_IF_FAILED(rg->add_graphics_pass(
       "clear",
       [&](GraphicsPassBuilder* builder) -> absl::Status {
         // input
-        builder->set_vertex_binding(0, VK_VERTEX_INPUT_RATE_VERTEX, 16,
-                                    {VertexInputAttribute(0, 0, VK_FORMAT_R32G32B32_SFLOAT)});
+        builder
+            ->set_vertex_binding(0, VK_VERTEX_INPUT_RATE_VERTEX, 12,
+                                 {VertexInputAttribute(0, 0, VK_FORMAT_R32G32B32_SFLOAT)})
+            ->set_shader_by_glsl(VK_SHADER_STAGE_VERTEX_BIT, R"glsl(
+#version 450 core
+
+layout(location = 0) in vec3 inPosition;
+
+void main() {
+  gl_Position = inPosition;
+}
+)glsl");
+
+        builder->set_shader_by_glsl(VK_SHADER_STAGE_FRAGMENT_BIT, R"glsl(
+#version 450 core
+
+layout(location=0) out vec4 outColor;
+
+void main() {
+  outColor = vec4(1,1,1,1);
+}
+)glsl");
+
+        builder->set_color_attachments({color0});
 
         return absl::OkStatus();
       },

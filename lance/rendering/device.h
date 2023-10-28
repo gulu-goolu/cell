@@ -44,6 +44,9 @@ class Device : public core::Inherit<Device, core::Object> {
 
   absl::StatusOr<core::RefCountPtr<ShaderModule>> create_shader_module(const core::Blob* blob);
 
+  absl::StatusOr<core::RefCountPtr<ShaderModule>> create_shader_from_source(
+      VkShaderStageFlagBits stage, const char* source);
+
   absl::StatusOr<uint32_t> find_queue_family_index(VkQueueFlags flags) const;
 
   absl::Status submit(uint32_t queue_family_index,

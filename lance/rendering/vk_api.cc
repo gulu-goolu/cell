@@ -94,6 +94,7 @@ VkApi::VkApi() {
   VK_API_LOAD(vkCmdBindVertexBuffers);
   VK_API_LOAD(vkCmdBindPipeline);
   VK_API_LOAD(vkCreateComputePipelines);
+  VK_API_LOAD(vkCreateGraphicsPipelines);
   VK_API_LOAD(vkCreatePipelineLayout);
   VK_API_LOAD(vkCreateDescriptorSetLayout);
   VK_API_LOAD(vkDestroyDescriptorSetLayout);
@@ -118,6 +119,8 @@ VkApi::VkApi() {
   VK_API_LOAD(vkCmdBeginRenderPass);
   VK_API_LOAD(vkCmdEndRenderPass);
   VK_API_LOAD(vkCmdNextSubpass);
+  VK_API_LOAD(vkCmdSetViewport);
+  VK_API_LOAD(vkCmdSetScissor);
 
 #undef VK_API_LOAD
 }

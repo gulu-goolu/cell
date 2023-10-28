@@ -7,7 +7,7 @@
 
 namespace lance {
 namespace rendering {
-class Resource : public core::Inherit<Resource, core::Object> {
+class RenderGraphResource : public core::Inherit<RenderGraphResource, core::Object> {
  public:
 };
 
@@ -54,14 +54,19 @@ class GraphicsPassBuilder : public PassBuilder {
                                                   absl::Span<const VertexInputAttribute> attrs) = 0;
 
   // default: VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST
-  virtual GraphicsPassBuilder* set_topology(VkPrimitiveTopology topology);
+  virtual GraphicsPassBuilder* set_topology(VkPrimitiveTopology topology) = 0;
 
   virtual GraphicsPassBuilder* set_color_attachments(absl::Span<const std::string> ids) = 0;
 
-  virtual GraphicsPassBuilder* set_depth_stencil_attachment(const std::string& id) = 0;
+  virtual GraphicsPassBuilder* set_depth_stencil_attachment(const std::string& id,
+                                                            bool depth_test_enable) = 0;
 
   virtual GraphicsPassBuilder* set_viewport(float x, float y, float width, float height,
                                             float min_depth = 0, float max_depth = 1) = 0;
+
+  virtual GraphicsPassBuilder* set_cull_mode(VkCullModeFlagBits cull_mode) = 0;
+  virtual GraphicsPassBuilder* set_front_face(VkFrontFace front_face) = 0;
+  virtual GraphicsPassBuilder* set_polygon_mode(VkPolygonMode mode) = 0;
 
   // resources
   virtual GraphicsPassBuilder* add_descriptor_set(
@@ -73,17 +78,8 @@ class GraphicsPassBuilder : public PassBuilder {
   virtual GraphicsPassBuilder* set_shader(VkShaderStageFlagBits stage,
                                           const core::RefCountPtr<ShaderModule>& shader_module) = 0;
 
-  GraphicsPassBuilder* set_vertex_shader(const core::RefCountPtr<ShaderModule>& shader_module) {
-    return set_shader(VK_SHADER_STAGE_VERTEX_BIT, shader_module);
-  }
-
-  GraphicsPassBuilder* set_fragment_shader(const core::RefCountPtr<ShaderModule>& shader_module) {
-    return set_shader(VK_SHADER_STAGE_FRAGMENT_BIT, shader_module);
-  }
-
-  GraphicsPassBuilder* set_gemetry_shader(const core::RefCountPtr<ShaderModule>& shader_module) {
-    return set_shader(VK_SHADER_STAGE_GEOMETRY_BIT, shader_module);
-  }
+  virtual GraphicsPassBuilder* set_shader_by_glsl(VkShaderStageFlagBits stage,
+                                                  const char* source) = 0;
 };
 
 class Context {
@@ -100,11 +96,18 @@ class Context {
 
   void draw(uint32_t vertex_count, uint32_t instance_count, uint32_t first_vertex,
             uint32_t first_instance);
+
+  void set_viewport(uint32_t first_viewport, absl::Span<const VkViewport> viewports);
+
+  void set_scissors(uint32_t first_scissor, absl::Span<const VkRect2D> scissors);
 };
 
 class RenderGraph : public core::Inherit<RenderGraph, core::Object> {
  public:
-  virtual absl::StatusOr<std::string> import_resource(core::RefCountPtr<Resource> resource) = 0;
+  virtual absl::StatusOr<std::string> import_resource(
+      const std::string& name, const core::RefCountPtr<RenderGraphResource>& resource) = 0;
+
+  virtual absl::StatusOr<std::string> create_resource(const std::string& name) = 0;
 
   virtual absl::StatusOr<std::string> create_attachment(VkImageType image_type, VkFormat format,
                                                         VkImageUsageFlags usage,
@@ -122,7 +125,7 @@ class RenderGraph : public core::Inherit<RenderGraph, core::Object> {
 
   virtual absl::Status execute(
       VkCommandBuffer command_buffer,
-      absl::Span<const std::pair<std::string, core::RefCountPtr<Resource>>> inputs) = 0;
+      absl::Span<const std::pair<std::string, core::RefCountPtr<RenderGraphResource>>> inputs) = 0;
 };
 
 absl::StatusOr<core::RefCountPtr<RenderGraph>> create_render_graph(

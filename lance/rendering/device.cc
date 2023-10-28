@@ -4,6 +4,7 @@
 #include "absl/strings/str_join.h"
 #include "glog/logging.h"
 #include "lance/core/util.h"
+#include "shader_compiler.h"
 #include "vk_api.h"
 
 namespace lance {
@@ -169,6 +170,16 @@ absl::StatusOr<core::RefCountPtr<ShaderModule>> Device::create_shader_module(
                                                          nullptr, &vk_shader_module));
 
   return core::make_refcounted<ShaderModule>(this, vk_shader_module);
+}
+
+absl::StatusOr<core::RefCountPtr<ShaderModule>> Device::create_shader_from_source(
+    VkShaderStageFlagBits stage, const char *source) {
+  static const std::unordered_map<VkShaderStageFlagBits, glslang_stage_t> m = {
+      {VK_SHADER_STAGE_VERTEX_BIT, glslang_stage_t::GLSLANG_STAGE_VERTEX},
+  };
+  LANCE_ASSIGN_OR_RETURN(blob, compile_glsl_shader(source, m.at(stage)));
+
+  return create_shader_module(blob.get());
 }
 
 absl::StatusOr<uint32_t> Device::find_queue_family_index(VkQueueFlags flags) const {

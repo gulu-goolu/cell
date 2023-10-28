@@ -179,8 +179,9 @@ class PipelineLayout : public core::Inherit<PipelineLayout, core::Object> {
 
 class Pipeline : public core::Inherit<Pipeline, core::Object> {
  public:
-  Pipeline(core::RefCountPtr<Device> device, VkPipeline vk_pipeline)
-      : device_(device), vk_pipeline_(vk_pipeline) {}
+  Pipeline(core::RefCountPtr<Device> device, VkPipeline vk_pipeline,
+           const core::RefCountPtr<PipelineLayout>& pipeline_layout)
+      : device_(device), vk_pipeline_(vk_pipeline), pipeline_layout_(pipeline_layout) {}
 
   ~Pipeline();
 
@@ -189,6 +190,7 @@ class Pipeline : public core::Inherit<Pipeline, core::Object> {
  private:
   core::RefCountPtr<Device> device_;
   VkPipeline vk_pipeline_{VK_NULL_HANDLE};
+  core::RefCountPtr<PipelineLayout> pipeline_layout_;
 };
 
 class CommandPool : public core::Inherit<CommandPool, core::Object> {
@@ -228,6 +230,34 @@ class CommandBuffer : public core::Inherit<CommandBuffer, core::Object> {
  private:
   core::RefCountPtr<CommandPool> command_pool_;
   VkCommandBuffer vk_command_buffer_{VK_NULL_HANDLE};
+};
+
+class Framebuffer : public core::Inherit<Framebuffer, core::Object> {
+ public:
+  Framebuffer(const core::RefCountPtr<Device>& device, VkFramebuffer vk_framebuffer)
+      : device_(device), vk_framebuffer_(vk_framebuffer) {}
+
+  ~Framebuffer();
+
+  VkFramebuffer vk_framebuffer() const { return vk_framebuffer_; }
+
+ private:
+  core::RefCountPtr<Device> device_;
+  VkFramebuffer vk_framebuffer_{VK_NULL_HANDLE};
+};
+
+class RenderPass : public core::Inherit<RenderPass, core::Object> {
+ public:
+  RenderPass(core::RefCountPtr<Device> device, VkRenderPass vk_render_pass)
+      : device_(device), vk_render_pass_(vk_render_pass) {}
+
+  ~RenderPass();
+
+  VkRenderPass vk_render_pass() const { return vk_render_pass_; }
+
+ private:
+  core::RefCountPtr<Device> device_;
+  VkRenderPass vk_render_pass_{VK_NULL_HANDLE};
 };
 
 }  // namespace rendering

@@ -397,5 +397,17 @@ absl::Status CommandBuffer::end() {
 
   return absl::OkStatus();
 }
+
+Framebuffer::~Framebuffer() {
+  if (vk_framebuffer_) {
+    VkApi::get()->vkDestroyFramebuffer(device_->vk_device(), vk_framebuffer_, nullptr);
+  }
+}
+
+RenderPass::~RenderPass() {
+  if (vk_render_pass_) {
+    VkApi::get()->vkDestroyRenderPass(device_->vk_device(), vk_render_pass_, nullptr);
+  }
+}
 }  // namespace rendering
 }  // namespace lance

@@ -14,13 +14,16 @@ class Resource : public core::Inherit<Resource, core::Object> {
 class PassBuilder {
  public:
   virtual ~PassBuilder() = default;
+};
 
-  virtual absl::Status set_color_attachment(std::string_view id) = 0;
-  virtual absl::Status set_depth_attachment(std::string_view id) = 0;
+class ComputePassBuilder : public PassBuilder {
+ public:
   virtual absl::Status set_shader(VkShaderStageFlagBits stage,
                                   core::RefCountPtr<ShaderModule> shader_module) = 0;
+
   virtual absl::Status set_descriptor_set_layout(
       uint32_t set, core::RefCountPtr<DescriptorSetLayout> descriptor_set_layout) = 0;
+
   virtual absl::Status add_descriptor_binding(uint32_t set,
                                               VkDescriptorSetLayoutBinding binding) = 0;
 
@@ -30,6 +33,56 @@ class PassBuilder {
 
   absl::Status set_compute_shader(core::RefCountPtr<ShaderModule> shader_module) {
     return set_shader(VK_SHADER_STAGE_COMPUTE_BIT, shader_module);
+  }
+};
+
+struct VertexInputAttribute {
+  uint32_t offset;
+  uint32_t location;
+  VkFormat format;
+
+  VertexInputAttribute() = default;
+
+  VertexInputAttribute(uint32_t _offset, uint32_t _location, VkFormat _format)
+      : offset(_offset), location(_location), format(_format) {}
+};
+
+class GraphicsPassBuilder : public PassBuilder {
+ public:
+  virtual GraphicsPassBuilder* set_vertex_binding(uint32_t binding, VkVertexInputRate input_rate,
+                                                  uint32_t stride,
+                                                  absl::Span<const VertexInputAttribute> attrs) = 0;
+
+  // default: VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST
+  virtual GraphicsPassBuilder* set_topology(VkPrimitiveTopology topology);
+
+  virtual GraphicsPassBuilder* set_color_attachments(absl::Span<const std::string> ids) = 0;
+
+  virtual GraphicsPassBuilder* set_depth_stencil_attachment(const std::string& id) = 0;
+
+  virtual GraphicsPassBuilder* set_viewport(float x, float y, float width, float height,
+                                            float min_depth = 0, float max_depth = 1) = 0;
+
+  // resources
+  virtual GraphicsPassBuilder* add_descriptor_set(
+      uint32_t set, core::RefCountPtr<DescriptorSetLayout> layout) = 0;
+
+  virtual GraphicsPassBuilder* add_push_constants(VkShaderStageFlags stage_flags, uint32_t offset,
+                                                  uint32_t size) = 0;
+
+  virtual GraphicsPassBuilder* set_shader(VkShaderStageFlagBits stage,
+                                          const core::RefCountPtr<ShaderModule>& shader_module) = 0;
+
+  GraphicsPassBuilder* set_vertex_shader(const core::RefCountPtr<ShaderModule>& shader_module) {
+    return set_shader(VK_SHADER_STAGE_VERTEX_BIT, shader_module);
+  }
+
+  GraphicsPassBuilder* set_fragment_shader(const core::RefCountPtr<ShaderModule>& shader_module) {
+    return set_shader(VK_SHADER_STAGE_FRAGMENT_BIT, shader_module);
+  }
+
+  GraphicsPassBuilder* set_gemetry_shader(const core::RefCountPtr<ShaderModule>& shader_module) {
+    return set_shader(VK_SHADER_STAGE_GEOMETRY_BIT, shader_module);
   }
 };
 
@@ -44,15 +97,26 @@ class Context {
   void push_constants(VkShaderStageFlags stage, uint32_t offset, uint32_t size, const void* values);
 
   void dispatch(uint32_t group_count_x, uint32_t group_count_y, uint32_t group_count_z);
+
+  void draw(uint32_t vertex_count, uint32_t instance_count, uint32_t first_vertex,
+            uint32_t first_instance);
 };
 
 class RenderGraph : public core::Inherit<RenderGraph, core::Object> {
  public:
-  absl::StatusOr<std::string> add_resource(absl::Span<const std::string> deps);
+  virtual absl::StatusOr<std::string> import_resource(core::RefCountPtr<Resource> resource) = 0;
 
-  virtual absl::Status add_pass(std::string name,
-                                std::function<absl::Status(PassBuilder*)> setup_fn,
-                                std::function<absl::Status(Context* ctx)> execute_fn) = 0;
+  virtual absl::StatusOr<std::string> create_attachment(VkImageType image_type, VkFormat format,
+                                                        VkImageUsageFlags usage,
+                                                        VkExtent3D extent) = 0;
+
+  virtual absl::Status add_compute_pass(std::string name,
+                                        std::function<absl::Status(ComputePassBuilder*)> setup_fn,
+                                        std::function<absl::Status(Context* ctx)> execute_fn) = 0;
+
+  virtual absl::Status add_graphics_pass(std::string_view name,
+                                         std::function<absl::Status(GraphicsPassBuilder*)> setup_fn,
+                                         std::function<absl::Status(Context*)> execute_fn) = 0;
 
   virtual absl::Status compile() = 0;
 

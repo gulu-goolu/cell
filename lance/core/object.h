@@ -12,7 +12,10 @@ class Object : public RefCounted {
 };
 
 template <typename T, typename Base>
-class Inherit : public Base {};
+class Inherit : public Base {
+ public:
+  using Base::Base;
+};
 
 class Blob : public Inherit<Blob, Object> {
  public:

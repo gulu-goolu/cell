@@ -41,6 +41,10 @@ class VkApi {
   VK_API_DEFINE(vkCreateShaderModule);
   VK_API_DEFINE(vkDestroyShaderModule);
   VK_API_DEFINE(vkCmdDispatch);
+  VK_API_DEFINE(vkCmdDraw);
+  VK_API_DEFINE(vkCmdDrawIndexed);
+  VK_API_DEFINE(vkCmdDrawIndirect);
+  VK_API_DEFINE(vkCmdDrawIndexedIndirect);
   VK_API_DEFINE(vkCmdDispatchBase);
   VK_API_DEFINE(vkCmdDispatchIndirect);
   VK_API_DEFINE(vkCmdBindDescriptorSets);
@@ -65,6 +69,13 @@ class VkApi {
   VK_API_DEFINE(vkCreateFence);
   VK_API_DEFINE(vkDestroyFence);
   VK_API_DEFINE(vkWaitForFences);
+  VK_API_DEFINE(vkCreateFramebuffer);
+  VK_API_DEFINE(vkDestroyFramebuffer);
+  VK_API_DEFINE(vkCreateRenderPass);
+  VK_API_DEFINE(vkDestroyRenderPass);
+  VK_API_DEFINE(vkCmdBeginRenderPass);
+  VK_API_DEFINE(vkCmdEndRenderPass);
+  VK_API_DEFINE(vkCmdNextSubpass);
 
 #undef VK_API_DEFINE
 

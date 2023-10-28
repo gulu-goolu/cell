@@ -83,6 +83,10 @@ VkApi::VkApi() {
   VK_API_LOAD(vkCreateShaderModule);
   VK_API_LOAD(vkDestroyShaderModule);
   VK_API_LOAD(vkCmdDispatch);
+  VK_API_LOAD(vkCmdDraw);
+  VK_API_LOAD(vkCmdDrawIndexed);
+  VK_API_LOAD(vkCmdDrawIndirect);
+  VK_API_LOAD(vkCmdDrawIndexedIndirect);
   VK_API_LOAD(vkCmdDispatchBase);
   VK_API_LOAD(vkCmdDispatchIndirect);
   VK_API_LOAD(vkCmdBindDescriptorSets);
@@ -107,6 +111,13 @@ VkApi::VkApi() {
   VK_API_LOAD(vkCreateFence);
   VK_API_LOAD(vkDestroyFence);
   VK_API_LOAD(vkWaitForFences);
+  VK_API_LOAD(vkCreateFramebuffer);
+  VK_API_LOAD(vkDestroyFramebuffer);
+  VK_API_LOAD(vkCreateRenderPass);
+  VK_API_LOAD(vkDestroyRenderPass);
+  VK_API_LOAD(vkCmdBeginRenderPass);
+  VK_API_LOAD(vkCmdEndRenderPass);
+  VK_API_LOAD(vkCmdNextSubpass);
 
 #undef VK_API_LOAD
 }

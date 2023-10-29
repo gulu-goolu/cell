@@ -1,7 +1,5 @@
 #pragma once
 
-#include <cstdint>
-
 #include "absl/strings/str_format.h"
 
 namespace lance {
@@ -41,5 +39,15 @@ struct matrix4x4 {
     return result;
   }
 };
+
+template <typename Sink>
+inline void AbslStringify(Sink& sink, const float3& v) {
+  absl::Format(&sink, "(%f, %f, %f)", v.x, v.y, v.z);
+}
+
+template <typename Sink>
+inline void AbslStringify(Sink& sink, const float4& v) {
+  absl::Format(&sink, "(%f, %f, %f, %f)", v.x, v.y, v.z, v.w);
+}
 }  // namespace core
 }  // namespace lance

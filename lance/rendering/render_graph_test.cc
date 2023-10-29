@@ -123,7 +123,11 @@ void main() {
 }
 )glsl");
 
-        builder->set_color_attachments({color0});
+        builder->add_color_attachment(color0, 0,
+                                      AttachmentDescription()
+                                          .set_format(VK_FORMAT_R32G32B32_SFLOAT)
+                                          .clear_to({0.f, 0.f, 0.f, 1.f})
+                                          .set_store_op(VK_ATTACHMENT_STORE_OP_DONT_CARE));
 
         return absl::OkStatus();
       },

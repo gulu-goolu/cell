@@ -47,6 +47,59 @@ struct VertexInputAttribute {
       : offset(_offset), location(_location), format(_format) {}
 };
 
+struct AttachmentDescription {
+  AttachmentDescription() {
+    description = VkAttachmentDescription{
+        0,
+        VK_FORMAT_UNDEFINED,
+        VK_SAMPLE_COUNT_1_BIT,
+        VK_ATTACHMENT_LOAD_OP_LOAD,
+        VK_ATTACHMENT_STORE_OP_STORE,
+        VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+        VK_ATTACHMENT_STORE_OP_DONT_CARE,
+        VK_IMAGE_LAYOUT_UNDEFINED,
+        VK_IMAGE_LAYOUT_UNDEFINED,
+    };
+
+    clear_value = {};
+  }
+
+  AttachmentDescription& set_format(VkFormat f) {
+    description.format = f;
+
+    return *this;
+  }
+
+  AttachmentDescription& set_load_op(VkAttachmentLoadOp op) {
+    description.loadOp = op;
+
+    return *this;
+  }
+
+  AttachmentDescription& clear_to(absl::Span<const float> values);
+
+  AttachmentDescription& set_store_op(VkAttachmentStoreOp op) {
+    description.storeOp = op;
+
+    return *this;
+  }
+
+  AttachmentDescription& set_initial_layout(VkImageLayout layout) {
+    description.initialLayout = layout;
+
+    return *this;
+  }
+
+  AttachmentDescription& set_final_layout(VkImageLayout layout) {
+    description.finalLayout = layout;
+
+    return *this;
+  }
+
+  VkAttachmentDescription description;
+  VkClearValue clear_value;
+};
+
 class GraphicsPassBuilder : public PassBuilder {
  public:
   virtual GraphicsPassBuilder* set_vertex_binding(uint32_t binding, VkVertexInputRate input_rate,
@@ -56,10 +109,10 @@ class GraphicsPassBuilder : public PassBuilder {
   // default: VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST
   virtual GraphicsPassBuilder* set_topology(VkPrimitiveTopology topology) = 0;
 
-  virtual GraphicsPassBuilder* set_color_attachments(absl::Span<const std::string> ids) = 0;
+  virtual GraphicsPassBuilder* add_color_attachment(int32_t resource_id, uint32_t location,
+                                                    AttachmentDescription description) = 0;
 
-  virtual GraphicsPassBuilder* set_depth_stencil_attachment(const std::string& id,
-                                                            bool depth_test_enable) = 0;
+  virtual GraphicsPassBuilder* set_depth_stencil_attachment(int32_t id, bool depth_test_enable) = 0;
 
   virtual GraphicsPassBuilder* set_viewport(float x, float y, float width, float height,
                                             float min_depth = 0, float max_depth = 1) = 0;
@@ -67,6 +120,8 @@ class GraphicsPassBuilder : public PassBuilder {
   virtual GraphicsPassBuilder* set_cull_mode(VkCullModeFlagBits cull_mode) = 0;
   virtual GraphicsPassBuilder* set_front_face(VkFrontFace front_face) = 0;
   virtual GraphicsPassBuilder* set_polygon_mode(VkPolygonMode mode) = 0;
+
+  virtual GraphicsPassBuilder* set_blend_constants(absl::Span<const float> values) = 0;
 
   // resources
   virtual GraphicsPassBuilder* add_descriptor_set(
@@ -104,10 +159,10 @@ class Context {
 
 class RenderGraph : public core::Inherit<RenderGraph, core::Object> {
  public:
-  virtual absl::StatusOr<std::string> import_resource(
+  virtual absl::StatusOr<int32_t> import_resource(
       const std::string& name, const core::RefCountPtr<RenderGraphResource>& resource) = 0;
 
-  virtual absl::StatusOr<std::string> create_resource(const std::string& name) = 0;
+  virtual absl::StatusOr<int32_t> create_resource(const std::string& name) = 0;
 
   virtual absl::StatusOr<std::string> create_attachment(VkImageType image_type, VkFormat format,
                                                         VkImageUsageFlags usage,

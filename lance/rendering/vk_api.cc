@@ -121,6 +121,8 @@ VkApi::VkApi() {
   VK_API_LOAD(vkCmdNextSubpass);
   VK_API_LOAD(vkCmdSetViewport);
   VK_API_LOAD(vkCmdSetScissor);
+  VK_API_LOAD(vkCmdSetBlendConstants);
+  VK_API_LOAD(vkCmdClearAttachments);
 
 #undef VK_API_LOAD
 }

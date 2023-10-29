@@ -7,6 +7,18 @@
 
 namespace lance {
 namespace rendering {
+
+AttachmentDescription &AttachmentDescription::clear_to(absl::Span<const float> values) {
+  description.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+
+  CHECK_EQ(4, values.size());
+  for (size_t i = 0; i < 4; ++i) {
+    clear_value.color.float32[i] = values[i];
+  }
+
+  return *this;
+}
+
 namespace {
 class Pass {
  public:
@@ -51,6 +63,115 @@ class ComputePass : public Pass {
   core::RefCountPtr<Pipeline> pipeline_;
 };
 
+class PassBuilderImpl : public ComputePassBuilder {
+ public:
+  PassBuilderImpl(core::RefCountPtr<Device> device) : device_(device) {}
+
+  absl::Status set_shader(VkShaderStageFlagBits stage,
+                          core::RefCountPtr<ShaderModule> shader_module) override {
+    if (shader_modules_.find(stage) != shader_modules_.end()) {
+      return absl::AlreadyExistsError(absl::StrFormat("stage: %d", stage));
+    }
+
+    shader_modules_[stage] = shader_module;
+
+    return absl::OkStatus();
+  }
+
+  absl::Status set_descriptor_set_layout(
+      uint32_t set, core::RefCountPtr<DescriptorSetLayout> descriptor_set_layout) override {
+    return absl::OkStatus();
+  }
+
+  absl::Status add_descriptor_binding(uint32_t set, VkDescriptorSetLayoutBinding binding) override {
+    auto &descriptor_set = buffer_descriptors_[set];
+    if (descriptor_set.find(binding.binding) != descriptor_set.end()) {
+      return absl::AlreadyExistsError(
+          absl::StrFormat("binding already exits, binding: %d", binding.binding));
+    }
+
+    descriptor_set[binding.binding] = binding;
+
+    return absl::OkStatus();
+  }
+
+  bool is_compute_pass() const {
+    return shader_modules_.find(VK_SHADER_STAGE_COMPUTE_BIT) != shader_modules_.end();
+  }
+
+  absl::StatusOr<core::RefCountPtr<PipelineLayout>> create_pipeline_layout() const {
+    std::vector<VkDescriptorSetLayout> set_layouts;
+    set_layouts.resize(descriptor_set_layouts_.size(), VK_NULL_HANDLE);
+    for (const auto &pair : descriptor_set_layouts_) {
+      if (pair.first >= descriptor_set_layouts_.size()) {
+        return absl::InvalidArgumentError(absl::StrFormat("out of bound, set: %d", pair.first));
+      }
+
+      set_layouts[pair.first] = pair.second->vk_descriptor_set_layout();
+    }
+
+    VkPipelineLayoutCreateInfo pipeline_layout_create_info = {};
+    pipeline_layout_create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    pipeline_layout_create_info.setLayoutCount = set_layouts.size();
+    pipeline_layout_create_info.pSetLayouts = set_layouts.data();
+
+    VkPipelineLayout vk_pipeline_layout;
+    VK_RETURN_IF_FAILED(VkApi::get()->vkCreatePipelineLayout(
+        device_->vk_device(), &pipeline_layout_create_info, nullptr, &vk_pipeline_layout));
+
+    return core::make_refcounted<PipelineLayout>(device_, vk_pipeline_layout);
+  }
+
+  absl::StatusOr<core::RefCountPtr<Pipeline>> create_compute_pipeline(
+      const core::RefCountPtr<PipelineLayout> &pipeline_layout) const {
+    auto it = shader_modules_.find(VK_SHADER_STAGE_COMPUTE_BIT);
+    if (it == shader_modules_.end()) {
+      return absl::NotFoundError("compute shader not found");
+    }
+
+    VkComputePipelineCreateInfo pipeline_create_info = {};
+    pipeline_create_info.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+    pipeline_create_info.basePipelineIndex = -1;
+    pipeline_create_info.basePipelineHandle = nullptr;
+    pipeline_create_info.layout = pipeline_layout->vk_pipeline_layout();
+    pipeline_create_info.stage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    pipeline_create_info.stage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
+    pipeline_create_info.stage.module = it->second->vk_shader_module();
+    pipeline_create_info.stage.pName = "main";
+
+    VkPipeline vk_pipeline;
+    VK_RETURN_IF_FAILED(VkApi::get()->vkCreateComputePipelines(
+        device_->vk_device(), VK_NULL_HANDLE, 1, &pipeline_create_info, nullptr, &vk_pipeline));
+
+    return core::make_refcounted<Pipeline>(device_, vk_pipeline, pipeline_layout);
+  }
+
+  absl::StatusOr<std::unique_ptr<Pass>> create_pass(
+      std::function<absl::Status(Context *)> execute_fn) const {
+    if (is_compute_pass()) {
+      LANCE_ASSIGN_OR_RETURN(pipeline_layout, create_pipeline_layout());
+
+      LANCE_ASSIGN_OR_RETURN(pipeline, create_compute_pipeline(pipeline_layout));
+
+      return std::make_unique<ComputePass>(std::move(execute_fn), pipeline_layout, pipeline);
+    } else {
+      return nullptr;
+    }
+  }
+
+ private:
+  core::RefCountPtr<Device> device_;
+  std::unordered_map<VkShaderStageFlagBits, core::RefCountPtr<ShaderModule>> shader_modules_;
+
+  std::unordered_map<uint32_t, core::RefCountPtr<DescriptorSetLayout>> descriptor_set_layouts_;
+
+  std::unordered_map<uint32_t, std::unordered_map<uint32_t, VkDescriptorSetLayoutBinding>>
+      buffer_descriptors_;
+
+  VkCullModeFlags cull_mode_ = VK_CULL_MODE_NONE;
+  VkFrontFace front_face_ = VK_FRONT_FACE_CLOCKWISE;
+};
+
 class GraphicsPassBuilderImpl : public GraphicsPassBuilder {
  public:
   GraphicsPassBuilderImpl(const core::RefCountPtr<Device> &d) : device(d) {}
@@ -82,18 +203,17 @@ class GraphicsPassBuilderImpl : public GraphicsPassBuilder {
     return this;
   }
 
-  GraphicsPassBuilder *set_color_attachments(absl::Span<const std::string> ids) override {
-    CHECK(color_attachment_ids.empty());
+  GraphicsPassBuilder *add_color_attachment(int32_t resource_id, uint32_t location,
+                                            AttachmentDescription builder) override {
+    CHECK(color_attachments.find(location) == color_attachments.end());
 
-    for (const auto &id : ids) {
-      color_attachment_ids.push_back(id);
-    }
+    color_attachments[location].resource_id = resource_id;
+    color_attachments[location].description = builder;
 
     return this;
   }
 
-  GraphicsPassBuilder *set_depth_stencil_attachment(const std::string &id,
-                                                    bool depth_test_enable) override {
+  GraphicsPassBuilder *set_depth_stencil_attachment(int32_t id, bool depth_test_enable) override {
     depth_stencil_attachment = std::make_unique<DepthStencilAttachment>();
     depth_stencil_attachment->id = id;
     depth_stencil_attachment->depth_test_enable = depth_test_enable;
@@ -122,6 +242,16 @@ class GraphicsPassBuilderImpl : public GraphicsPassBuilder {
 
   GraphicsPassBuilder *set_polygon_mode(VkPolygonMode mode) override {
     polygon_mode = mode;
+
+    return this;
+  }
+
+  GraphicsPassBuilder *set_blend_constants(absl::Span<const float> values) override {
+    CHECK_EQ(values.size(), 4);
+
+    for (size_t i = 0; i < values.size(); ++i) {
+      blend_constants[i] = values[i];
+    }
 
     return this;
   }
@@ -302,10 +432,7 @@ class GraphicsPassBuilderImpl : public GraphicsPassBuilder {
     color_blend_state.logicOpEnable = VK_FALSE;
     color_blend_state.attachmentCount = blend_attachment_states.size();
     color_blend_state.pAttachments = blend_attachment_states.data();
-    color_blend_state.blendConstants[0] = 1;
-    color_blend_state.blendConstants[1] = 1;
-    color_blend_state.blendConstants[2] = 1;
-    color_blend_state.blendConstants[3] = 1;
+    for (size_t i = 0; i < 4; ++i) color_blend_state.blendConstants[i] = blend_constants[i];
 
     graphics_pipeline_create_info.pColorBlendState = &color_blend_state;
 
@@ -350,10 +477,15 @@ class GraphicsPassBuilderImpl : public GraphicsPassBuilder {
 
   VkPrimitiveTopology topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
 
-  std::vector<std::string> color_attachment_ids;
+  struct ColorAttachment {
+    int32_t resource_id;
+
+    AttachmentDescription description;
+  };
+  std::unordered_map<int32_t, ColorAttachment> color_attachments;
 
   struct DepthStencilAttachment {
-    std::string id;
+    int32_t id = -1;
 
     bool depth_test_enable = false;
   };
@@ -365,131 +497,68 @@ class GraphicsPassBuilderImpl : public GraphicsPassBuilder {
   VkCullModeFlagBits cull_mode = VK_CULL_MODE_NONE;
   VkPolygonMode polygon_mode = VK_POLYGON_MODE_FILL;
   VkFrontFace front_face = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+  std::array<float, 4> blend_constants = {1, 1, 1, 1};
 
   std::unordered_map<uint32_t, core::RefCountPtr<DescriptorSetLayout>> descriptor_set_layouts;
   std::vector<VkPushConstantRange> push_constants;
   std::unordered_map<VkShaderStageFlagBits, core::RefCountPtr<ShaderModule>> shader_modules;
 };
 
-class PassBuilderImpl : public ComputePassBuilder {
+class GraphicsPass : public Pass {
  public:
-  PassBuilderImpl(core::RefCountPtr<Device> device) : device_(device) {}
+  GraphicsPass(std::function<absl::Status(Context *)> execute_fn)
+      : execute_fn_(std::move(execute_fn)) {}
 
-  absl::Status set_shader(VkShaderStageFlagBits stage,
-                          core::RefCountPtr<ShaderModule> shader_module) override {
-    if (shader_modules_.find(stage) != shader_modules_.end()) {
-      return absl::AlreadyExistsError(absl::StrFormat("stage: %d", stage));
-    }
+  absl::Status execute(VkCommandBuffer vk_command_buffer) override {
+    class GraphicsContext : public Context {
+     public:
+      GraphicsContext(GraphicsPass *pass, VkCommandBuffer vk_command_buffer)
+          : pass_(pass), vk_command_buffer_(vk_command_buffer) {}
 
-    shader_modules_[stage] = shader_module;
-
-    return absl::OkStatus();
-  }
-
-  absl::Status set_descriptor_set_layout(
-      uint32_t set, core::RefCountPtr<DescriptorSetLayout> descriptor_set_layout) override {
-    return absl::OkStatus();
-  }
-
-  absl::Status add_descriptor_binding(uint32_t set, VkDescriptorSetLayoutBinding binding) override {
-    auto &descriptor_set = buffer_descriptors_[set];
-    if (descriptor_set.find(binding.binding) != descriptor_set.end()) {
-      return absl::AlreadyExistsError(
-          absl::StrFormat("binding already exits, binding: %d", binding.binding));
-    }
-
-    descriptor_set[binding.binding] = binding;
-
-    return absl::OkStatus();
-  }
-
-  bool is_compute_pass() const {
-    return shader_modules_.find(VK_SHADER_STAGE_COMPUTE_BIT) != shader_modules_.end();
-  }
-
-  absl::StatusOr<core::RefCountPtr<PipelineLayout>> create_pipeline_layout() const {
-    std::vector<VkDescriptorSetLayout> set_layouts;
-    set_layouts.resize(descriptor_set_layouts_.size(), VK_NULL_HANDLE);
-    for (const auto &pair : descriptor_set_layouts_) {
-      if (pair.first >= descriptor_set_layouts_.size()) {
-        return absl::InvalidArgumentError(absl::StrFormat("out of bound, set: %d", pair.first));
+      VkCommandBuffer vk_command_buffer() const override { return vk_command_buffer_; }
+      VkPipeline vk_pipeline() const override { return pass_->pipeline_->vk_pipeline(); }
+      VkPipelineLayout vk_pipeline_layout() const override {
+        return pass_->pipeline_layout_->vk_pipeline_layout();
       }
 
-      set_layouts[pair.first] = pair.second->vk_descriptor_set_layout();
-    }
+     private:
+      GraphicsPass *pass_ = nullptr;
+      VkCommandBuffer vk_command_buffer_{VK_NULL_HANDLE};
+    };
 
-    VkPipelineLayoutCreateInfo pipeline_layout_create_info = {};
-    pipeline_layout_create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-    pipeline_layout_create_info.setLayoutCount = set_layouts.size();
-    pipeline_layout_create_info.pSetLayouts = set_layouts.data();
+    GraphicsContext ctx(this, vk_command_buffer);
 
-    VkPipelineLayout vk_pipeline_layout;
-    VK_RETURN_IF_FAILED(VkApi::get()->vkCreatePipelineLayout(
-        device_->vk_device(), &pipeline_layout_create_info, nullptr, &vk_pipeline_layout));
+    // begin render pass
+    VkRenderPassBeginInfo render_pass_begin_info = {};
+    render_pass_begin_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+    render_pass_begin_info.framebuffer = framebuffer_->vk_framebuffer();
 
-    return core::make_refcounted<PipelineLayout>(device_, vk_pipeline_layout);
-  }
+    LANCE_RETURN_IF_FAILED(execute_fn_(&ctx));
 
-  absl::StatusOr<core::RefCountPtr<Pipeline>> create_compute_pipeline(
-      const core::RefCountPtr<PipelineLayout> &pipeline_layout) const {
-    auto it = shader_modules_.find(VK_SHADER_STAGE_COMPUTE_BIT);
-    if (it == shader_modules_.end()) {
-      return absl::NotFoundError("compute shader not found");
-    }
+    VkApi::get()->vkCmdEndRenderPass(vk_command_buffer);
 
-    VkComputePipelineCreateInfo pipeline_create_info = {};
-    pipeline_create_info.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
-    pipeline_create_info.basePipelineIndex = -1;
-    pipeline_create_info.basePipelineHandle = nullptr;
-    pipeline_create_info.layout = pipeline_layout->vk_pipeline_layout();
-    pipeline_create_info.stage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-    pipeline_create_info.stage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
-    pipeline_create_info.stage.module = it->second->vk_shader_module();
-    pipeline_create_info.stage.pName = "main";
-
-    VkPipeline vk_pipeline;
-    VK_RETURN_IF_FAILED(VkApi::get()->vkCreateComputePipelines(
-        device_->vk_device(), VK_NULL_HANDLE, 1, &pipeline_create_info, nullptr, &vk_pipeline));
-
-    return core::make_refcounted<Pipeline>(device_, vk_pipeline, pipeline_layout);
-  }
-
-  absl::StatusOr<std::unique_ptr<Pass>> create_pass(
-      std::function<absl::Status(Context *)> execute_fn) const {
-    if (is_compute_pass()) {
-      LANCE_ASSIGN_OR_RETURN(pipeline_layout, create_pipeline_layout());
-
-      LANCE_ASSIGN_OR_RETURN(pipeline, create_compute_pipeline(pipeline_layout));
-
-      return std::make_unique<ComputePass>(std::move(execute_fn), pipeline_layout, pipeline);
-    } else {
-      return nullptr;
-    }
+    return absl::OkStatus();
   }
 
  private:
-  core::RefCountPtr<Device> device_;
-  std::unordered_map<VkShaderStageFlagBits, core::RefCountPtr<ShaderModule>> shader_modules_;
+  std::function<absl::Status(Context *)> execute_fn_;
+  core::RefCountPtr<RenderPass> render_pass_;
+  core::RefCountPtr<Pipeline> pipeline_;
+  core::RefCountPtr<PipelineLayout> pipeline_layout_;
 
-  std::unordered_map<uint32_t, core::RefCountPtr<DescriptorSetLayout>> descriptor_set_layouts_;
-
-  std::unordered_map<uint32_t, std::unordered_map<uint32_t, VkDescriptorSetLayoutBinding>>
-      buffer_descriptors_;
-
-  VkCullModeFlags cull_mode_ = VK_CULL_MODE_NONE;
-  VkFrontFace front_face_ = VK_FRONT_FACE_CLOCKWISE;
+  core::RefCountPtr<Framebuffer> framebuffer_;
 };
 
 class RenderGraphImpl : public core::Inherit<RenderGraphImpl, RenderGraph> {
  public:
   explicit RenderGraphImpl(core::RefCountPtr<Device> device) : device_(device) {}
 
-  absl::StatusOr<std::string> import_resource(
+  absl::StatusOr<int32_t> import_resource(
       const std::string &name, const core::RefCountPtr<RenderGraphResource> &resource) override {
     return absl::OkStatus();
   }
 
-  absl::StatusOr<std::string> create_resource(const std::string &name) override {
+  absl::StatusOr<int32_t> create_resource(const std::string &name) override {
     return absl::OkStatus();
   }
 
@@ -530,9 +599,8 @@ class RenderGraphImpl : public core::Inherit<RenderGraphImpl, RenderGraph> {
   absl::Status add_graphics_pass(std::string_view name,
                                  std::function<absl::Status(GraphicsPassBuilder *)> setup_fn,
                                  std::function<absl::Status(Context *)> execute_fn) override {
-    GraphicsPassBuilderImpl builder(device_);
-
-    LANCE_RETURN_IF_FAILED(setup_fn(&builder));
+    auto builder = std::make_unique<GraphicsPassBuilderImpl>(device_);
+    LANCE_RETURN_IF_FAILED(setup_fn(builder.get()));
 
     return absl::OkStatus();
   }
@@ -551,8 +619,11 @@ class RenderGraphImpl : public core::Inherit<RenderGraphImpl, RenderGraph> {
   }
 
  private:
-  std::unordered_map<std::string, std::string> resources_;
+  int64_t resource_id_alloc_{0};
 
+  std::unordered_map<int64_t, std::string> resources_;
+
+  // device for create resource
   core::RefCountPtr<Device> device_;
 
   std::vector<std::unique_ptr<Pass>> passes_;

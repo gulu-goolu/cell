@@ -79,6 +79,8 @@ class VkApi {
   VK_API_DEFINE(vkCmdNextSubpass);
   VK_API_DEFINE(vkCmdSetViewport);
   VK_API_DEFINE(vkCmdSetScissor);
+  VK_API_DEFINE(vkCmdSetBlendConstants);
+  VK_API_DEFINE(vkCmdClearAttachments);
 
 #undef VK_API_DEFINE
 

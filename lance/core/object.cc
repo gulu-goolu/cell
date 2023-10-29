@@ -4,6 +4,8 @@
 
 namespace lance {
 namespace core {
+std::string_view Object::type_name() const { return "Object"; }
+
 RefCountPtr<Blob> Blob::create(const void* data, size_t size) {
   class BlobFromData : public Inherit<BlobFromData, Blob> {
    public:

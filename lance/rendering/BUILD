@@ -44,6 +44,7 @@ cc_test(
 cc_test(
     name = "render_graph_test",
     srcs = ["render_graph_test.cc"],
+    env = {"GLOG_v": "10"},
     linkstatic = True,
     deps = [
         ":rendering",

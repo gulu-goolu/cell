@@ -176,7 +176,13 @@ absl::StatusOr<core::RefCountPtr<ShaderModule>> Device::create_shader_from_sourc
     VkShaderStageFlagBits stage, const char *source) {
   static const std::unordered_map<VkShaderStageFlagBits, glslang_stage_t> m = {
       {VK_SHADER_STAGE_VERTEX_BIT, glslang_stage_t::GLSLANG_STAGE_VERTEX},
+      {VK_SHADER_STAGE_FRAGMENT_BIT, glslang_stage_t::GLSLANG_STAGE_FRAGMENT},
+      {VK_SHADER_STAGE_GEOMETRY_BIT, glslang_stage_t::GLSLANG_STAGE_GEOMETRY},
+      {VK_SHADER_STAGE_MESH_BIT_EXT, glslang_stage_t::GLSLANG_STAGE_MESH},
+      {VK_SHADER_STAGE_ANY_HIT_BIT_KHR, glslang_stage_t::GLSLANG_STAGE_ANYHIT},
   };
+  CHECK(m.find(stage) != m.end());
+
   LANCE_ASSIGN_OR_RETURN(blob, compile_glsl_shader(source, m.at(stage)));
 
   return create_shader_module(blob.get());

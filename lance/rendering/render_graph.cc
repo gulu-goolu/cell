@@ -7,7 +7,6 @@
 
 namespace lance {
 namespace rendering {
-
 AttachmentDescription &AttachmentDescription::clear_to(absl::Span<const float> values) {
   description.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
 
@@ -20,6 +19,32 @@ AttachmentDescription &AttachmentDescription::clear_to(absl::Span<const float> v
 }
 
 namespace {
+class RenderGraphImage : public core::Inherit<RenderGraphImage, RenderGraphResource> {
+ public:
+  virtual absl::Status append_image_usage(VkImageUsageFlags flags) = 0;
+};
+
+class RenderGraphTexture2D : public core::Inherit<RenderGraphTexture2D, RenderGraphImage> {
+ public:
+  RenderGraphTexture2D(VkFormat format, VkExtent2D extent) : format_(format), extent_(extent) {}
+
+  absl::Status append_image_usage(VkImageUsageFlags flags) override {
+    usage_flags_ = usage_flags_ | flags;
+
+    return absl::OkStatus();
+  }
+
+  absl::Status initialize(Device *device) override { return absl::OkStatus(); }
+
+ private:
+  const VkFormat format_;
+  const VkExtent2D extent_;
+
+  VkImageUsageFlags usage_flags_{0};
+
+  core::RefCountPtr<Image> image_;
+};
+
 class Pass {
  public:
   virtual ~Pass() = default;
@@ -172,9 +197,12 @@ class PassBuilderImpl : public ComputePassBuilder {
   VkFrontFace front_face_ = VK_FRONT_FACE_CLOCKWISE;
 };
 
+class RenderGraphImpl;
+
 class GraphicsPassBuilderImpl : public GraphicsPassBuilder {
  public:
-  GraphicsPassBuilderImpl(const core::RefCountPtr<Device> &d) : device(d) {}
+  GraphicsPassBuilderImpl(RenderGraph *rg, const core::RefCountPtr<Device> &d)
+      : render_graph(rg), device(d) {}
 
   GraphicsPassBuilder *set_vertex_binding(uint32_t binding, VkVertexInputRate input_rate,
                                           uint32_t stride,
@@ -207,8 +235,17 @@ class GraphicsPassBuilderImpl : public GraphicsPassBuilder {
                                             AttachmentDescription builder) override {
     CHECK(color_attachments.find(location) == color_attachments.end());
 
+    auto resource = render_graph->get_resource(resource_id).value();
+    auto image = resource->cast_to<RenderGraphImage>();
+    CHECK(image.ok()) << "msg: " << image.status().ToString();
+
+    auto st = image.value()->append_image_usage(VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT);
+    CHECK(st.ok()) << "err_msg: " << st.ToString();
+
     color_attachments[location].resource_id = resource_id;
     color_attachments[location].description = builder;
+
+    LOG(INFO) << "[GraphicsBuilder::add_color_attachment] resource_id: " << resource_id;
 
     return this;
   }
@@ -281,6 +318,8 @@ class GraphicsPassBuilderImpl : public GraphicsPassBuilder {
     CHECK(shader_modules.find(stage) == shader_modules.end());
 
     shader_modules[stage] = shader_module;
+
+    VLOG(4) << "[GraphicsBuilder::set_shader] stage: " << stage;
 
     return this;
   }
@@ -470,6 +509,8 @@ class GraphicsPassBuilderImpl : public GraphicsPassBuilder {
     core::RefCountPtr<RenderPass> render_pass_;
   };
 
+  RenderGraph *render_graph;
+
   const core::RefCountPtr<Device> device;
 
   std::vector<VkVertexInputBindingDescription> vertex_input_bindings;
@@ -562,6 +603,29 @@ class RenderGraphImpl : public core::Inherit<RenderGraphImpl, RenderGraph> {
     return absl::OkStatus();
   }
 
+  absl::StatusOr<int32_t> create_texture2d(const std::string &name, VkFormat format,
+                                           VkExtent2D extent) override {
+    auto texture2d = core::make_refcounted<RenderGraphTexture2D>(format, extent);
+
+    auto id = resources_.size();
+    resources_[id] = texture2d;
+
+    VLOG(10) << "create texture2d, name: " << name << ", extent: (" << extent.width << ","
+             << extent.height << ")";
+
+    return id;
+  }
+
+  absl::StatusOr<RenderGraphResource *> get_resource(int32_t resource_id) const override {
+    auto it = resources_.find(resource_id);
+    if (it == resources_.end()) {
+      return absl::NotFoundError(
+          absl::StrFormat("resource not found, resource_id: %d", resource_id));
+    }
+
+    return it->second.get();
+  }
+
   absl::StatusOr<std::string> create_attachment(VkImageType image_type, VkFormat format,
                                                 VkImageUsageFlags usage,
                                                 VkExtent3D extent) override {
@@ -599,13 +663,22 @@ class RenderGraphImpl : public core::Inherit<RenderGraphImpl, RenderGraph> {
   absl::Status add_graphics_pass(std::string_view name,
                                  std::function<absl::Status(GraphicsPassBuilder *)> setup_fn,
                                  std::function<absl::Status(Context *)> execute_fn) override {
-    auto builder = std::make_unique<GraphicsPassBuilderImpl>(device_);
+    auto builder = std::make_unique<GraphicsPassBuilderImpl>(this, device_);
     LANCE_RETURN_IF_FAILED(setup_fn(builder.get()));
 
     return absl::OkStatus();
   }
 
-  absl::Status compile() override { return absl::OkStatus(); }
+  absl::Status compile() override {
+    // setup resource
+    for (auto &pair : resources_) {
+      LANCE_RETURN_IF_FAILED(pair.second->initialize(device_.get()));
+    }
+
+    // set render pass
+
+    return absl::OkStatus();
+  }
 
   absl::Status execute(
       VkCommandBuffer command_buffer,
@@ -619,9 +692,7 @@ class RenderGraphImpl : public core::Inherit<RenderGraphImpl, RenderGraph> {
   }
 
  private:
-  int64_t resource_id_alloc_{0};
-
-  std::unordered_map<int64_t, std::string> resources_;
+  std::unordered_map<int64_t, core::RefCountPtr<RenderGraphResource>> resources_;
 
   // device for create resource
   core::RefCountPtr<Device> device_;

@@ -9,6 +9,7 @@ namespace lance {
 namespace rendering {
 class RenderGraphResource : public core::Inherit<RenderGraphResource, core::Object> {
  public:
+  virtual absl::Status initialize(Device* device) = 0;
 };
 
 class PassBuilder {
@@ -163,6 +164,9 @@ class RenderGraph : public core::Inherit<RenderGraph, core::Object> {
       const std::string& name, const core::RefCountPtr<RenderGraphResource>& resource) = 0;
 
   virtual absl::StatusOr<int32_t> create_resource(const std::string& name) = 0;
+  virtual absl::StatusOr<int32_t> create_texture2d(const std::string& name, VkFormat format,
+                                                   VkExtent2D extent) = 0;
+  virtual absl::StatusOr<RenderGraphResource*> get_resource(int32_t resource_id) const = 0;
 
   virtual absl::StatusOr<std::string> create_attachment(VkImageType image_type, VkFormat format,
                                                         VkImageUsageFlags usage,

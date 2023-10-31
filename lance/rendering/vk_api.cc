@@ -123,6 +123,7 @@ VkApi::VkApi() {
   VK_API_LOAD(vkCmdSetScissor);
   VK_API_LOAD(vkCmdSetBlendConstants);
   VK_API_LOAD(vkCmdClearAttachments);
+  VK_API_LOAD(vkBindImageMemory);
 
 #undef VK_API_LOAD
 }

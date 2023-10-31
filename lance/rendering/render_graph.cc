@@ -22,11 +22,22 @@ namespace {
 class RenderGraphImage : public core::Inherit<RenderGraphImage, RenderGraphResource> {
  public:
   virtual absl::Status append_image_usage(VkImageUsageFlags flags) = 0;
+
+  virtual VkImageView image_view() const = 0;
 };
 
 class RenderGraphTexture2D : public core::Inherit<RenderGraphTexture2D, RenderGraphImage> {
  public:
   RenderGraphTexture2D(VkFormat format, VkExtent2D extent) : format_(format), extent_(extent) {}
+
+  ~RenderGraphTexture2D() override {
+    if (vk_image_view_) {
+      VkApi::get()->vkDestroyImageView(device_->vk_device(), vk_image_view_, nullptr);
+    }
+    if (vk_image_) {
+      VkApi::get()->vkDestroyImage(device_->vk_device(), vk_image_, nullptr);
+    }
+  }
 
   absl::Status append_image_usage(VkImageUsageFlags flags) override {
     usage_flags_ = usage_flags_ | flags;
@@ -34,7 +45,61 @@ class RenderGraphTexture2D : public core::Inherit<RenderGraphTexture2D, RenderGr
     return absl::OkStatus();
   }
 
-  absl::Status initialize(Device *device) override { return absl::OkStatus(); }
+  VkImageView image_view() const override { return vk_image_view_; }
+
+  absl::Status initialize(Device *device) override {
+    device_.reset(device);
+
+    VkImageCreateInfo image_create_info = {};
+    image_create_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    image_create_info.imageType = VK_IMAGE_TYPE_2D;
+    image_create_info.format = format_;
+    image_create_info.extent.width = extent_.width;
+    image_create_info.extent.height = extent_.height;
+    image_create_info.extent.depth = 1;
+    image_create_info.arrayLayers = 1;
+    image_create_info.mipLevels = 1;
+    image_create_info.samples = VK_SAMPLE_COUNT_1_BIT;
+    image_create_info.tiling = VK_IMAGE_TILING_OPTIMAL;
+    image_create_info.usage = usage_flags_;
+    image_create_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    image_create_info.queueFamilyIndexCount = 0;
+    image_create_info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    VK_RETURN_IF_FAILED(
+        VkApi::get()->vkCreateImage(device->vk_device(), &image_create_info, nullptr, &vk_image_));
+
+    VkMemoryRequirements mem_reqs;
+    VkApi::get()->vkGetImageMemoryRequirements(device->vk_device(), vk_image_, &mem_reqs);
+
+    LANCE_ASSIGN_OR_RETURN(memory_type_index,
+                           device->find_memory_type_index(mem_reqs.memoryTypeBits,
+                                                          VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT));
+
+    LANCE_ASSIGN_OR_RETURN(memory, DeviceMemory::create(device_, memory_type_index, mem_reqs.size));
+    device_memory_ = memory;
+
+    VK_RETURN_IF_FAILED(VkApi::get()->vkBindImageMemory(device->vk_device(), vk_image_,
+                                                        device_memory_->vk_device_memory(), 0));
+
+    VkImageViewCreateInfo image_view_create_info = {};
+    image_view_create_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    image_view_create_info.image = vk_image_;
+    image_view_create_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    image_view_create_info.format = format_;
+    image_view_create_info.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+    image_view_create_info.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+    image_view_create_info.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+    image_view_create_info.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+    image_view_create_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    image_view_create_info.subresourceRange.baseArrayLayer = 0;
+    image_view_create_info.subresourceRange.layerCount = 1;
+    image_view_create_info.subresourceRange.baseMipLevel = 0;
+    image_view_create_info.subresourceRange.levelCount = 1;
+    VK_RETURN_IF_FAILED(VkApi::get()->vkCreateImageView(
+        device->vk_device(), &image_view_create_info, nullptr, &vk_image_view_));
+
+    return absl::OkStatus();
+  }
 
  private:
   const VkFormat format_;
@@ -42,12 +107,18 @@ class RenderGraphTexture2D : public core::Inherit<RenderGraphTexture2D, RenderGr
 
   VkImageUsageFlags usage_flags_{0};
 
-  core::RefCountPtr<Image> image_;
+  core::RefCountPtr<Device> device_;
+
+  VkImage vk_image_{VK_NULL_HANDLE};
+  core::RefCountPtr<DeviceMemory> device_memory_;
+  VkImageView vk_image_view_{VK_NULL_HANDLE};
 };
 
 class Pass {
  public:
   virtual ~Pass() = default;
+
+  virtual absl::Status compile(Device *device) = 0;
 
   virtual absl::Status execute(VkCommandBuffer cmd) = 0;
 };
@@ -58,6 +129,8 @@ class ComputePass : public Pass {
               const core::RefCountPtr<PipelineLayout> &pipeline_layout,
               core::RefCountPtr<Pipeline> pipeline)
       : execute_fn_(execute_fn), pipeline_layout_(pipeline_layout), pipeline_(pipeline) {}
+
+  absl::Status compile(Device *device) override { return absl::OkStatus(); }
 
   absl::Status execute(VkCommandBuffer cmd) override {
     VkApi::get()->vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline_->vk_pipeline());
@@ -547,8 +620,17 @@ class GraphicsPassBuilderImpl : public GraphicsPassBuilder {
 
 class GraphicsPass : public Pass {
  public:
-  GraphicsPass(std::function<absl::Status(Context *)> execute_fn)
-      : execute_fn_(std::move(execute_fn)) {}
+  GraphicsPass(std::unique_ptr<GraphicsPassBuilderImpl> builder,
+               std::function<absl::Status(Context *)> execute_fn)
+      : builder_(std::move(builder)), execute_fn_(std::move(execute_fn)) {}
+
+  absl::Status compile(Device *device) override {
+    device_.reset(device);
+
+    LANCE_RETURN_IF_FAILED(create_render_pass());
+
+    return absl::OkStatus();
+  }
 
   absl::Status execute(VkCommandBuffer vk_command_buffer) override {
     class GraphicsContext : public Context {
@@ -569,10 +651,7 @@ class GraphicsPass : public Pass {
 
     GraphicsContext ctx(this, vk_command_buffer);
 
-    // begin render pass
-    VkRenderPassBeginInfo render_pass_begin_info = {};
-    render_pass_begin_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-    render_pass_begin_info.framebuffer = framebuffer_->vk_framebuffer();
+    LANCE_RETURN_IF_FAILED(begin_render_pass(vk_command_buffer));
 
     LANCE_RETURN_IF_FAILED(execute_fn_(&ctx));
 
@@ -582,12 +661,69 @@ class GraphicsPass : public Pass {
   }
 
  private:
+  absl::Status create_render_pass() {
+    attachment_count_ = builder_->color_attachments.size();
+    if (builder_->depth_stencil_attachment) {
+      attachment_count_ += 1;
+    }
+
+    // create render pass
+    std::vector<VkAttachmentDescription> attachment_descriptions;
+    attachment_descriptions.resize(attachment_count_);
+    for (const auto &pair : builder_->color_attachments) {
+      attachment_descriptions[pair.first] = pair.second.description.description;
+    }
+
+    VkSubpassDescription subpass_description = {};
+
+    std::vector<VkSubpassDependency> subpass_dependencies;
+
+    VkRenderPassCreateInfo render_pass_create_info = {};
+    render_pass_create_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+    render_pass_create_info.attachmentCount = attachment_descriptions.size();
+    render_pass_create_info.pAttachments = attachment_descriptions.data();
+    render_pass_create_info.subpassCount = 1;
+    render_pass_create_info.pSubpasses = &subpass_description;
+    render_pass_create_info.dependencyCount = subpass_dependencies.size();
+    render_pass_create_info.pDependencies = subpass_dependencies.data();
+
+    return absl::OkStatus();
+  }
+
+  absl::Status begin_render_pass(VkCommandBuffer vk_command_buffer) {
+    std::vector<VkClearValue> clear_values;
+    clear_values.resize(attachment_count_);
+
+    for (const auto &pair : builder_->color_attachments) {
+      clear_values[pair.first] = pair.second.description.clear_value;
+    }
+
+    VkRenderPassBeginInfo render_pass_begin_info = {};
+    render_pass_begin_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+    render_pass_begin_info.renderPass = render_pass_->vk_render_pass();
+    render_pass_begin_info.framebuffer = framebuffer_->vk_framebuffer();
+    render_pass_begin_info.renderArea = render_area_;
+    render_pass_begin_info.clearValueCount = clear_values.size();
+    render_pass_begin_info.pClearValues = clear_values.data();
+
+    VkApi::get()->vkCmdBeginRenderPass(vk_command_buffer, &render_pass_begin_info,
+                                       VK_SUBPASS_CONTENTS_INLINE);
+
+    return absl::OkStatus();
+  }
+
+  std::unique_ptr<GraphicsPassBuilderImpl> builder_;
   std::function<absl::Status(Context *)> execute_fn_;
+
+  core::RefCountPtr<Device> device_;
   core::RefCountPtr<RenderPass> render_pass_;
   core::RefCountPtr<Pipeline> pipeline_;
   core::RefCountPtr<PipelineLayout> pipeline_layout_;
-
   core::RefCountPtr<Framebuffer> framebuffer_;
+
+  int32_t attachment_count_ = 0;
+
+  VkRect2D render_area_;
 };
 
 class RenderGraphImpl : public core::Inherit<RenderGraphImpl, RenderGraph> {
@@ -666,6 +802,8 @@ class RenderGraphImpl : public core::Inherit<RenderGraphImpl, RenderGraph> {
     auto builder = std::make_unique<GraphicsPassBuilderImpl>(this, device_);
     LANCE_RETURN_IF_FAILED(setup_fn(builder.get()));
 
+    auto graphics_pass = std::make_unique<GraphicsPass>(std::move(builder), std::move(execute_fn));
+
     return absl::OkStatus();
   }
 
@@ -675,7 +813,10 @@ class RenderGraphImpl : public core::Inherit<RenderGraphImpl, RenderGraph> {
       LANCE_RETURN_IF_FAILED(pair.second->initialize(device_.get()));
     }
 
-    // set render pass
+    // compile passes
+    for (const auto &pass : passes_) {
+      LANCE_RETURN_IF_FAILED(pass->compile(device_.get()));
+    }
 
     return absl::OkStatus();
   }

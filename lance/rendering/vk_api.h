@@ -81,6 +81,7 @@ class VkApi {
   VK_API_DEFINE(vkCmdSetScissor);
   VK_API_DEFINE(vkCmdSetBlendConstants);
   VK_API_DEFINE(vkCmdClearAttachments);
+  VK_API_DEFINE(vkBindImageMemory);
 
 #undef VK_API_DEFINE
 

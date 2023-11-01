@@ -850,7 +850,7 @@ class RenderGraphImpl : public core::Inherit<RenderGraphImpl, RenderGraph> {
     return absl::InvalidArgumentError(absl::StrFormat("unsupported bind point, %d", bind_point));
   }
 
-  absl::Status compile() override {
+  absl::Status compile(const CompileOptions *options) override {
     // setup resource
     for (auto &pair : resources_) {
       LANCE_RETURN_IF_FAILED(pair.second->initialize(device_.get()));

@@ -253,7 +253,11 @@ class RenderGraph : public core::Inherit<RenderGraph, core::Object> {
   virtual absl::Status add_pass(const std::string& name, VkPipelineBindPoint bind_point,
                                 core::RefCountPtr<IPass> pass) = 0;
 
-  virtual absl::Status compile() = 0;
+  struct CompileOptions {
+    bool enable_pass_fusion = true;
+  };
+
+  virtual absl::Status compile(const CompileOptions* options = nullptr) = 0;
 
   virtual absl::Status execute(
       VkCommandBuffer command_buffer,

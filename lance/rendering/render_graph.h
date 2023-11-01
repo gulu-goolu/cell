@@ -168,12 +168,13 @@ class GraphicsPassBuilder : public PassBuilder {
   // default: VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST
   virtual GraphicsPassBuilder* set_topology(VkPrimitiveTopology topology) = 0;
 
-  virtual GraphicsPassBuilder* add_color_attachment(int32_t resource_id, uint32_t location,
+  virtual GraphicsPassBuilder* add_color_attachment(core::RefCountPtr<RenderGraphImage> image,
+                                                    uint32_t location,
                                                     AttachmentDescription description,
                                                     const VkRect2D* render_arena = nullptr) = 0;
 
-  virtual GraphicsPassBuilder* set_depth_stencil_attachment(int32_t id,
-                                                            AttachmentDescription description) = 0;
+  virtual GraphicsPassBuilder* set_depth_stencil_attachment(
+      core::RefCountPtr<RenderGraphImage> image, AttachmentDescription description) = 0;
 
   virtual GraphicsPassBuilder* set_viewport(float x, float y, float width, float height,
                                             float min_depth = 0, float max_depth = 1) = 0;
@@ -236,7 +237,6 @@ class RenderGraph : public core::Inherit<RenderGraph, core::Object> {
   virtual absl::StatusOr<int32_t> create_resource(const std::string& name) = 0;
   virtual absl::StatusOr<core::RefCountPtr<RenderGraphImage>> create_texture2d(
       const std::string& name, VkFormat format, VkExtent2D extent) = 0;
-  virtual absl::StatusOr<RenderGraphResource*> get_resource(int32_t resource_id) const = 0;
 
   virtual absl::StatusOr<std::string> create_attachment(VkImageType image_type, VkFormat format,
                                                         VkImageUsageFlags usage,

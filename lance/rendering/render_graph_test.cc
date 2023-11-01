@@ -123,7 +123,7 @@ void main() {
 }
         )glsl");
 
-        builder->add_color_attachment(color0->id(), 0,
+        builder->add_color_attachment(color0, 0,
                                       AttachmentDescription()
                                           .set_format(VK_FORMAT_R32G32B32_SFLOAT)
                                           .clear_to({0.f, 0.f, 0.f, 1.f})
@@ -146,7 +146,7 @@ TEST(render_graph, depth_test) {
       "DepthPass",
       [depth_buffer](GraphicsPassBuilder* builder) -> absl::Status {
         builder->set_depth_stencil_attachment(
-            depth_buffer->id(), AttachmentDescription().set_format(VK_FORMAT_R32_SFLOAT));
+            depth_buffer, AttachmentDescription().set_format(VK_FORMAT_R32_SFLOAT));
 
         return absl::OkStatus();
       },

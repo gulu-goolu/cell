@@ -309,34 +309,30 @@ class GraphicsPassBuilderImpl : public GraphicsPassBuilder {
     return this;
   }
 
-  GraphicsPassBuilder *add_color_attachment(int32_t resource_id, uint32_t location,
-                                            AttachmentDescription builder,
+  GraphicsPassBuilder *add_color_attachment(core::RefCountPtr<RenderGraphImage> image,
+                                            uint32_t location, AttachmentDescription builder,
                                             const VkRect2D *render_area) override {
     CHECK(color_attachments.find(location) == color_attachments.end());
 
-    auto resource = render_graph->get_resource(resource_id).value();
-    auto image = resource->cast_to<RenderGraphImage>();
-    CHECK(image.ok()) << "msg: " << image.status().ToString();
-
-    auto st = image.value()->append_image_usage(VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT);
+    auto st = image->append_image_usage(VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT);
     CHECK(st.ok()) << "err_msg: " << st.ToString();
 
-    color_attachments[location].resource_id = resource_id;
+    color_attachments[location].resource_id = image->id();
     color_attachments[location].description = builder;
 
     if (render_area) {
       color_attachments[location].render_area = std::make_unique<VkRect2D>(*render_area);
     }
 
-    LOG(INFO) << "[GraphicsBuilder::add_color_attachment] resource_id: " << resource_id;
+    LOG(INFO) << "[GraphicsBuilder::add_color_attachment] resource_id: " << image->id();
 
     return this;
   }
 
-  GraphicsPassBuilder *set_depth_stencil_attachment(int32_t id,
+  GraphicsPassBuilder *set_depth_stencil_attachment(core::RefCountPtr<RenderGraphImage> image,
                                                     AttachmentDescription description) override {
     depth_stencil_attachment = std::make_unique<DepthStencilAttachment>();
-    depth_stencil_attachment->id = id;
+    depth_stencil_attachment->id = image->id();
     depth_stencil_attachment->description = description;
 
     return this;
@@ -775,16 +771,6 @@ class RenderGraphImpl : public core::Inherit<RenderGraphImpl, RenderGraph> {
              << extent.height << ")";
 
     return texture2d;
-  }
-
-  absl::StatusOr<RenderGraphResource *> get_resource(int32_t resource_id) const override {
-    auto it = resources_.find(resource_id);
-    if (it == resources_.end()) {
-      return absl::NotFoundError(
-          absl::StrFormat("resource not found, resource_id: %d", resource_id));
-    }
-
-    return it->second.get();
   }
 
   absl::StatusOr<std::string> create_attachment(VkImageType image_type, VkFormat format,

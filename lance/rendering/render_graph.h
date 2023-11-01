@@ -10,6 +10,18 @@ namespace rendering {
 class RenderGraphResource : public core::Inherit<RenderGraphResource, core::Object> {
  public:
   virtual absl::Status initialize(Device* device) = 0;
+
+  // unique id of resource
+  virtual int32_t id() const = 0;
+};
+
+class RenderGraphImage : public core::Inherit<RenderGraphImage, RenderGraphResource> {
+ public:
+  virtual absl::Status append_image_usage(VkImageUsageFlags flags) = 0;
+
+  virtual VkImageView image_view() const = 0;
+
+  virtual VkExtent3D image_extent() const = 0;
 };
 
 class PassBuilder {
@@ -101,6 +113,52 @@ struct AttachmentDescription {
   VkClearValue clear_value;
 };
 
+struct DepthStencilState {
+  VkBool32 depth_test_enable = VK_FALSE;
+
+  VkBool32 depth_write_enable = VK_FALSE;
+
+  VkCompareOp depth_test_op = VK_COMPARE_OP_ALWAYS;
+
+  VkBool32 depth_bounds_test_enable = VK_FALSE;
+
+  VkBool32 stencil_test_enable = VK_FALSE;
+  float min_depth_bounds = 0.f;
+  float max_depth_bounds = 1.f;
+
+  DepthStencilState& enable_depth_test() {
+    depth_test_enable = VK_TRUE;
+
+    return *this;
+  }
+
+  DepthStencilState& enable_depth_write() {
+    depth_write_enable = VK_TRUE;
+
+    return *this;
+  }
+
+  DepthStencilState& set_depth_test_op(VkCompareOp op) {
+    depth_test_op = op;
+
+    return *this;
+  }
+
+  DepthStencilState& enable_depth_bounds_test() {
+    depth_bounds_test_enable = VK_TRUE;
+
+    return *this;
+  }
+
+  DepthStencilState& enable_stencil_test(float min_depth_bounds, float max_depth_bounds) {
+    stencil_test_enable = VK_TRUE;
+    min_depth_bounds = min_depth_bounds;
+    max_depth_bounds = max_depth_bounds;
+
+    return *this;
+  }
+};
+
 class GraphicsPassBuilder : public PassBuilder {
  public:
   virtual GraphicsPassBuilder* set_vertex_binding(uint32_t binding, VkVertexInputRate input_rate,
@@ -111,9 +169,11 @@ class GraphicsPassBuilder : public PassBuilder {
   virtual GraphicsPassBuilder* set_topology(VkPrimitiveTopology topology) = 0;
 
   virtual GraphicsPassBuilder* add_color_attachment(int32_t resource_id, uint32_t location,
-                                                    AttachmentDescription description) = 0;
+                                                    AttachmentDescription description,
+                                                    const VkRect2D* render_arena = nullptr) = 0;
 
-  virtual GraphicsPassBuilder* set_depth_stencil_attachment(int32_t id, bool depth_test_enable) = 0;
+  virtual GraphicsPassBuilder* set_depth_stencil_attachment(int32_t id,
+                                                            AttachmentDescription description) = 0;
 
   virtual GraphicsPassBuilder* set_viewport(float x, float y, float width, float height,
                                             float min_depth = 0, float max_depth = 1) = 0;
@@ -123,6 +183,9 @@ class GraphicsPassBuilder : public PassBuilder {
   virtual GraphicsPassBuilder* set_polygon_mode(VkPolygonMode mode) = 0;
 
   virtual GraphicsPassBuilder* set_blend_constants(absl::Span<const float> values) = 0;
+
+  // default is disable
+  virtual GraphicsPassBuilder* set_depth_stencil_state(DepthStencilState state) = 0;
 
   // resources
   virtual GraphicsPassBuilder* add_descriptor_set(
@@ -158,14 +221,21 @@ class Context {
   void set_scissors(uint32_t first_scissor, absl::Span<const VkRect2D> scissors);
 };
 
+class IPass : public core::Inherit<IPass, core::Object> {
+ public:
+  virtual absl::Status setup(PassBuilder* builder) = 0;
+
+  virtual absl::Status execute(Context* ctx) = 0;
+};
+
 class RenderGraph : public core::Inherit<RenderGraph, core::Object> {
  public:
   virtual absl::StatusOr<int32_t> import_resource(
       const std::string& name, const core::RefCountPtr<RenderGraphResource>& resource) = 0;
 
   virtual absl::StatusOr<int32_t> create_resource(const std::string& name) = 0;
-  virtual absl::StatusOr<int32_t> create_texture2d(const std::string& name, VkFormat format,
-                                                   VkExtent2D extent) = 0;
+  virtual absl::StatusOr<core::RefCountPtr<RenderGraphImage>> create_texture2d(
+      const std::string& name, VkFormat format, VkExtent2D extent) = 0;
   virtual absl::StatusOr<RenderGraphResource*> get_resource(int32_t resource_id) const = 0;
 
   virtual absl::StatusOr<std::string> create_attachment(VkImageType image_type, VkFormat format,
@@ -179,6 +249,9 @@ class RenderGraph : public core::Inherit<RenderGraph, core::Object> {
   virtual absl::Status add_graphics_pass(std::string_view name,
                                          std::function<absl::Status(GraphicsPassBuilder*)> setup_fn,
                                          std::function<absl::Status(Context*)> execute_fn) = 0;
+
+  virtual absl::Status add_pass(const std::string& name, VkPipelineBindPoint bind_point,
+                                core::RefCountPtr<IPass> pass) = 0;
 
   virtual absl::Status compile() = 0;
 

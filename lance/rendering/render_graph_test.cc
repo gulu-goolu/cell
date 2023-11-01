@@ -123,7 +123,7 @@ void main() {
 }
         )glsl");
 
-        builder->add_color_attachment(color0, 0,
+        builder->add_color_attachment(color0->id(), 0,
                                       AttachmentDescription()
                                           .set_format(VK_FORMAT_R32G32B32_SFLOAT)
                                           .clear_to({0.f, 0.f, 0.f, 1.f})
@@ -134,6 +134,23 @@ void main() {
       [=](Context* ctx) -> absl::Status { return absl::OkStatus(); }));
 
   LANCE_THROW_IF_FAILED(rg->compile());
+}
+
+TEST(render_graph, depth_test) {
+  auto rg = create_render_graph(test_device()).value();
+
+  auto depth_buffer =
+      rg->create_texture2d("depth-buffer", VK_FORMAT_D32_SFLOAT, {640, 480}).value();
+
+  LANCE_THROW_IF_FAILED(rg->add_graphics_pass(
+      "DepthPass",
+      [depth_buffer](GraphicsPassBuilder* builder) -> absl::Status {
+        builder->set_depth_stencil_attachment(
+            depth_buffer->id(), AttachmentDescription().set_format(VK_FORMAT_R32_SFLOAT));
+
+        return absl::OkStatus();
+      },
+      [](Context* ctx) -> absl::Status { return absl::OkStatus(); }));
 }
 }  // namespace rendering
 }  // namespace lance

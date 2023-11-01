@@ -19,16 +19,10 @@ AttachmentDescription &AttachmentDescription::clear_to(absl::Span<const float> v
 }
 
 namespace {
-class RenderGraphImage : public core::Inherit<RenderGraphImage, RenderGraphResource> {
- public:
-  virtual absl::Status append_image_usage(VkImageUsageFlags flags) = 0;
-
-  virtual VkImageView image_view() const = 0;
-};
-
 class RenderGraphTexture2D : public core::Inherit<RenderGraphTexture2D, RenderGraphImage> {
  public:
-  RenderGraphTexture2D(VkFormat format, VkExtent2D extent) : format_(format), extent_(extent) {}
+  RenderGraphTexture2D(int32_t id, VkFormat format, VkExtent2D extent)
+      : id_(id), format_(format), extent_(extent) {}
 
   ~RenderGraphTexture2D() override {
     if (vk_image_view_) {
@@ -46,6 +40,14 @@ class RenderGraphTexture2D : public core::Inherit<RenderGraphTexture2D, RenderGr
   }
 
   VkImageView image_view() const override { return vk_image_view_; }
+
+  VkExtent3D image_extent() const override {
+    VkExtent3D result;
+    result.width = extent_.width;
+    result.height = extent_.height;
+    result.depth = 1;
+    return result;
+  }
 
   absl::Status initialize(Device *device) override {
     device_.reset(device);
@@ -101,7 +103,10 @@ class RenderGraphTexture2D : public core::Inherit<RenderGraphTexture2D, RenderGr
     return absl::OkStatus();
   }
 
+  int32_t id() const override { return id_; }
+
  private:
+  const int32_t id_;
   const VkFormat format_;
   const VkExtent2D extent_;
 
@@ -305,7 +310,8 @@ class GraphicsPassBuilderImpl : public GraphicsPassBuilder {
   }
 
   GraphicsPassBuilder *add_color_attachment(int32_t resource_id, uint32_t location,
-                                            AttachmentDescription builder) override {
+                                            AttachmentDescription builder,
+                                            const VkRect2D *render_area) override {
     CHECK(color_attachments.find(location) == color_attachments.end());
 
     auto resource = render_graph->get_resource(resource_id).value();
@@ -318,15 +324,20 @@ class GraphicsPassBuilderImpl : public GraphicsPassBuilder {
     color_attachments[location].resource_id = resource_id;
     color_attachments[location].description = builder;
 
+    if (render_area) {
+      color_attachments[location].render_area = std::make_unique<VkRect2D>(*render_area);
+    }
+
     LOG(INFO) << "[GraphicsBuilder::add_color_attachment] resource_id: " << resource_id;
 
     return this;
   }
 
-  GraphicsPassBuilder *set_depth_stencil_attachment(int32_t id, bool depth_test_enable) override {
+  GraphicsPassBuilder *set_depth_stencil_attachment(int32_t id,
+                                                    AttachmentDescription description) override {
     depth_stencil_attachment = std::make_unique<DepthStencilAttachment>();
     depth_stencil_attachment->id = id;
-    depth_stencil_attachment->depth_test_enable = depth_test_enable;
+    depth_stencil_attachment->description = description;
 
     return this;
   }
@@ -365,6 +376,8 @@ class GraphicsPassBuilderImpl : public GraphicsPassBuilder {
 
     return this;
   }
+
+  GraphicsPassBuilder *set_depth_stencil_state(DepthStencilState state) override { return this; }
 
   GraphicsPassBuilder *add_descriptor_set(uint32_t set,
                                           core::RefCountPtr<DescriptorSetLayout> layout) override {
@@ -521,21 +534,23 @@ class GraphicsPassBuilderImpl : public GraphicsPassBuilder {
 
     graphics_pipeline_create_info.pMultisampleState = &multisample_state;
 
-    VkPipelineDepthStencilStateCreateInfo depth_stencil_state = {};
-    depth_stencil_state.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
-    depth_stencil_state.depthTestEnable = VK_FALSE;
-    depth_stencil_state.depthWriteEnable = VK_TRUE;
-    depth_stencil_state.depthCompareOp = VK_COMPARE_OP_ALWAYS;
-    depth_stencil_state.depthBoundsTestEnable = VK_FALSE;
-    depth_stencil_state.stencilTestEnable = VK_FALSE;
-    depth_stencil_state.minDepthBounds = 0.f;
-    depth_stencil_state.maxDepthBounds = 1.f;
-
-    if (depth_stencil_attachment) {
-      depth_stencil_state.depthTestEnable = depth_stencil_attachment->depth_test_enable;
-    }
-
-    graphics_pipeline_create_info.pDepthStencilState = &depth_stencil_state;
+    VkPipelineDepthStencilStateCreateInfo depth_stencil_state_info = {};
+    depth_stencil_state_info.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+    depth_stencil_state_info.depthTestEnable =
+        depth_stencil_state ? depth_stencil_state->depth_test_enable : VK_FALSE;
+    depth_stencil_state_info.depthWriteEnable =
+        depth_stencil_state ? depth_stencil_state->depth_write_enable : VK_FALSE;
+    depth_stencil_state_info.depthCompareOp =
+        depth_stencil_state ? depth_stencil_state->depth_test_op : VK_COMPARE_OP_ALWAYS;
+    depth_stencil_state_info.depthBoundsTestEnable =
+        depth_stencil_state ? depth_stencil_state->depth_bounds_test_enable : VK_FALSE;
+    depth_stencil_state_info.stencilTestEnable =
+        depth_stencil_state ? depth_stencil_state->stencil_test_enable : VK_FALSE;
+    depth_stencil_state_info.minDepthBounds =
+        depth_stencil_state ? depth_stencil_state->min_depth_bounds : 0.f;
+    depth_stencil_state_info.maxDepthBounds =
+        depth_stencil_state ? depth_stencil_state->max_depth_bounds : 1.f;
+    graphics_pipeline_create_info.pDepthStencilState = &depth_stencil_state_info;
 
     LANCE_ASSIGN_OR_RETURN(blend_attachment_states, create_color_blend_attachment_states());
 
@@ -595,13 +610,15 @@ class GraphicsPassBuilderImpl : public GraphicsPassBuilder {
     int32_t resource_id;
 
     AttachmentDescription description;
+
+    std::unique_ptr<VkRect2D> render_area;
   };
   std::unordered_map<int32_t, ColorAttachment> color_attachments;
 
   struct DepthStencilAttachment {
     int32_t id = -1;
 
-    bool depth_test_enable = false;
+    AttachmentDescription description;
   };
   std::unique_ptr<DepthStencilAttachment> depth_stencil_attachment;
 
@@ -611,6 +628,9 @@ class GraphicsPassBuilderImpl : public GraphicsPassBuilder {
   VkCullModeFlagBits cull_mode = VK_CULL_MODE_NONE;
   VkPolygonMode polygon_mode = VK_POLYGON_MODE_FILL;
   VkFrontFace front_face = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+
+  std::unique_ptr<DepthStencilState> depth_stencil_state;
+
   std::array<float, 4> blend_constants = {1, 1, 1, 1};
 
   std::unordered_map<uint32_t, core::RefCountPtr<DescriptorSetLayout>> descriptor_set_layouts;
@@ -670,8 +690,12 @@ class GraphicsPass : public Pass {
     // create render pass
     std::vector<VkAttachmentDescription> attachment_descriptions;
     attachment_descriptions.resize(attachment_count_);
+
     for (const auto &pair : builder_->color_attachments) {
       attachment_descriptions[pair.first] = pair.second.description.description;
+    }
+    if (builder_->depth_stencil_attachment) {
+      attachment_descriptions.back() = builder_->depth_stencil_attachment->description.description;
     }
 
     VkSubpassDescription subpass_description = {};
@@ -739,17 +763,18 @@ class RenderGraphImpl : public core::Inherit<RenderGraphImpl, RenderGraph> {
     return absl::OkStatus();
   }
 
-  absl::StatusOr<int32_t> create_texture2d(const std::string &name, VkFormat format,
-                                           VkExtent2D extent) override {
-    auto texture2d = core::make_refcounted<RenderGraphTexture2D>(format, extent);
+  absl::StatusOr<core::RefCountPtr<RenderGraphImage>> create_texture2d(const std::string &name,
+                                                                       VkFormat format,
+                                                                       VkExtent2D extent) override {
+    auto texture2d = core::make_refcounted<RenderGraphTexture2D>(
+        static_cast<int32_t>(resources_.size()), format, extent);
 
-    auto id = resources_.size();
-    resources_[id] = texture2d;
+    resources_[texture2d->id()] = texture2d;
 
     VLOG(10) << "create texture2d, name: " << name << ", extent: (" << extent.width << ","
              << extent.height << ")";
 
-    return id;
+    return texture2d;
   }
 
   absl::StatusOr<RenderGraphResource *> get_resource(int32_t resource_id) const override {
@@ -805,6 +830,24 @@ class RenderGraphImpl : public core::Inherit<RenderGraphImpl, RenderGraph> {
     auto graphics_pass = std::make_unique<GraphicsPass>(std::move(builder), std::move(execute_fn));
 
     return absl::OkStatus();
+  }
+
+  absl::Status add_pass(const std::string &name, VkPipelineBindPoint bind_point,
+                        core::RefCountPtr<IPass> pass) override {
+    if (bind_point == VK_PIPELINE_BIND_POINT_GRAPHICS) {
+      LANCE_RETURN_IF_FAILED(add_graphics_pass(
+          name,
+          [pass](GraphicsPassBuilder *builder) -> absl::Status { return pass->setup(builder); },
+          [pass](Context *ctx) -> absl::Status { return pass->execute(ctx); }));
+
+    } else if (bind_point == VK_PIPELINE_BIND_POINT_COMPUTE) {
+      LANCE_RETURN_IF_FAILED(add_compute_pass(
+          name,
+          [pass](ComputePassBuilder *builder) -> absl::Status { return pass->setup(builder); },
+          [pass](Context *ctx) -> absl::Status { return pass->execute(ctx); }));
+    }
+
+    return absl::InvalidArgumentError(absl::StrFormat("unsupported bind point, %d", bind_point));
   }
 
   absl::Status compile() override {

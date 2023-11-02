@@ -49,6 +49,8 @@ class RenderGraphTexture2D : public core::Inherit<RenderGraphTexture2D, RenderGr
     return result;
   }
 
+  VkFormat format() const override { return format_; }
+
   absl::Status initialize(Device *device) override {
     device_.reset(device);
 
@@ -317,7 +319,7 @@ class GraphicsPassBuilderImpl : public GraphicsPassBuilder {
     auto st = image->append_image_usage(VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT);
     CHECK(st.ok()) << "err_msg: " << st.ToString();
 
-    color_attachments[location].resource_id = image->id();
+    color_attachments[location].image = image;
     color_attachments[location].description = builder;
 
     if (render_area) {
@@ -334,6 +336,9 @@ class GraphicsPassBuilderImpl : public GraphicsPassBuilder {
     depth_stencil_attachment = std::make_unique<DepthStencilAttachment>();
     depth_stencil_attachment->id = image->id();
     depth_stencil_attachment->description = description;
+
+    auto st = image->append_image_usage(VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT);
+    CHECK(st.ok()) << "err_msg: " << st.ToString();
 
     return this;
   }
@@ -411,6 +416,8 @@ class GraphicsPassBuilderImpl : public GraphicsPassBuilder {
     auto shader = device->create_shader_from_source(stage, source);
     CHECK(shader.ok()) << "err_msg: " << shader.status().message();
 
+    VLOG(1) << "[GraphicsBuilder::set_shader_by_glsl] stage: " << stage;
+
     return set_shader(stage, shader.value());
   }
 
@@ -441,12 +448,23 @@ class GraphicsPassBuilderImpl : public GraphicsPassBuilder {
   absl::StatusOr<std::vector<VkPipelineColorBlendAttachmentState>>
   create_color_blend_attachment_states() const {
     std::vector<VkPipelineColorBlendAttachmentState> states;
+    for (const auto &color : color_attachments) {
+      VkPipelineColorBlendAttachmentState state = {};
+      state.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
+      state.dstColorBlendFactor = VK_BLEND_FACTOR_ZERO;
+      state.blendEnable = VK_FALSE;
+      state.colorWriteMask = 0x0f;
+
+      states.push_back(state);
+    }
     return states;
   }
 
   absl::StatusOr<core::RefCountPtr<Pipeline>> create_pipeline(
       const core::RefCountPtr<PipelineLayout> &pipeline_layout,
       const core::RefCountPtr<RenderPass> &render_pass, uint32_t subpass) const {
+    VLOG(10) << "[create_pipeline]";
+
     std::vector<VkPipelineShaderStageCreateInfo> shader_stage_create_infos = {};
     for (const auto &pair : shader_modules) {
       VkPipelineShaderStageCreateInfo shader_stage_create_info = {};
@@ -465,12 +483,14 @@ class GraphicsPassBuilderImpl : public GraphicsPassBuilder {
     graphics_pipeline_create_info.stageCount = shader_stage_create_infos.size();
     graphics_pipeline_create_info.pStages = shader_stage_create_infos.data();
 
-    VkPipelineVertexInputStateCreateInfo vertex_input_state;
+    VkPipelineVertexInputStateCreateInfo vertex_input_state = {};
     vertex_input_state.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
     vertex_input_state.vertexBindingDescriptionCount = vertex_input_bindings.size();
     vertex_input_state.pVertexBindingDescriptions = vertex_input_bindings.data();
     vertex_input_state.vertexAttributeDescriptionCount = vertex_input_attributes.size();
     vertex_input_state.pVertexAttributeDescriptions = vertex_input_attributes.data();
+    VLOG(10) << "vertex_input_bindings: " << vertex_input_bindings.size()
+             << ", vertex_attribute: " << vertex_input_attributes.size();
 
     graphics_pipeline_create_info.pVertexInputState = &vertex_input_state;
 
@@ -494,7 +514,7 @@ class GraphicsPassBuilderImpl : public GraphicsPassBuilder {
     } else {
       dynamic_states.push_back(VK_DYNAMIC_STATE_VIEWPORT);
     }
-    viewport_state.viewportCount = viewports.size();
+    viewport_state.viewportCount = viewports.empty() ? 1 : viewports.size();
     viewport_state.pViewports = viewports.data();
 
     std::vector<VkRect2D> scissors;
@@ -503,7 +523,7 @@ class GraphicsPassBuilderImpl : public GraphicsPassBuilder {
     } else {
       dynamic_states.push_back(VK_DYNAMIC_STATE_SCISSOR);
     }
-    viewport_state.scissorCount = scissors.size();
+    viewport_state.scissorCount = scissors.empty() ? 1 : scissors.size();
     viewport_state.pScissors = scissors.data();
 
     graphics_pipeline_create_info.pViewportState = &viewport_state;
@@ -546,7 +566,9 @@ class GraphicsPassBuilderImpl : public GraphicsPassBuilder {
         depth_stencil_state ? depth_stencil_state->min_depth_bounds : 0.f;
     depth_stencil_state_info.maxDepthBounds =
         depth_stencil_state ? depth_stencil_state->max_depth_bounds : 1.f;
-    graphics_pipeline_create_info.pDepthStencilState = &depth_stencil_state_info;
+    if (depth_stencil_attachment) {
+      graphics_pipeline_create_info.pDepthStencilState = &depth_stencil_state_info;
+    }
 
     LANCE_ASSIGN_OR_RETURN(blend_attachment_states, create_color_blend_attachment_states());
 
@@ -572,10 +594,14 @@ class GraphicsPassBuilderImpl : public GraphicsPassBuilder {
     graphics_pipeline_create_info.renderPass = render_pass->vk_render_pass();
     graphics_pipeline_create_info.subpass = subpass;
 
+    graphics_pipeline_create_info.basePipelineIndex = -1;
+
     VkPipeline vk_pipeline{VK_NULL_HANDLE};
     VK_RETURN_IF_FAILED(VkApi::get()->vkCreateGraphicsPipelines(device->vk_device(), VK_NULL_HANDLE,
                                                                 1, &graphics_pipeline_create_info,
                                                                 nullptr, &vk_pipeline));
+
+    VLOG(10) << "[create_pipeline] complete";
 
     return core::make_refcounted<GraphicsPipeline>(device, vk_pipeline, pipeline_layout,
                                                    render_pass);
@@ -603,7 +629,7 @@ class GraphicsPassBuilderImpl : public GraphicsPassBuilder {
   VkPrimitiveTopology topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
 
   struct ColorAttachment {
-    int32_t resource_id;
+    core::RefCountPtr<RenderGraphImage> image;
 
     AttachmentDescription description;
 
@@ -615,6 +641,8 @@ class GraphicsPassBuilderImpl : public GraphicsPassBuilder {
     int32_t id = -1;
 
     AttachmentDescription description;
+
+    std::unique_ptr<VkRect2D> render_area;
   };
   std::unique_ptr<DepthStencilAttachment> depth_stencil_attachment;
 
@@ -644,6 +672,14 @@ class GraphicsPass : public Pass {
     device_.reset(device);
 
     LANCE_RETURN_IF_FAILED(create_render_pass());
+
+    LANCE_RETURN_IF_FAILED(compute_render_area());
+
+    LANCE_ASSIGN_OR_RETURN(pipeline_layout, builder_->create_pipeline_layout());
+    pipeline_layout_ = pipeline_layout;
+
+    LANCE_ASSIGN_OR_RETURN(pipeline, builder_->create_pipeline(pipeline_layout, render_pass_, 0));
+    pipeline_ = pipeline;
 
     return absl::OkStatus();
   }
@@ -684,6 +720,8 @@ class GraphicsPass : public Pass {
     }
 
     // create render pass
+    //
+    // prepare attachment descriptions
     std::vector<VkAttachmentDescription> attachment_descriptions;
     attachment_descriptions.resize(attachment_count_);
 
@@ -694,7 +732,31 @@ class GraphicsPass : public Pass {
       attachment_descriptions.back() = builder_->depth_stencil_attachment->description.description;
     }
 
+    // prepare color attachment references
+    std::vector<VkAttachmentReference> color_attachment_references;
+
+    for (const auto &pair : builder_->color_attachments) {
+      VkAttachmentReference t;
+      t.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+      t.attachment = pair.first;
+
+      color_attachment_references.push_back(t);
+    }
+
     VkSubpassDescription subpass_description = {};
+    subpass_description.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+    subpass_description.inputAttachmentCount = 0;
+    subpass_description.colorAttachmentCount = color_attachment_references.size();
+    subpass_description.pColorAttachments = color_attachment_references.data();
+    subpass_description.pResolveAttachments = nullptr;
+
+    VkAttachmentReference depth_stencil_attachment_reference = {};
+    if (builder_->depth_stencil_attachment) {
+      depth_stencil_attachment_reference.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+      depth_stencil_attachment_reference.attachment = attachment_count_ - 1;
+      subpass_description.pDepthStencilAttachment = &depth_stencil_attachment_reference;
+    }
+    subpass_description.preserveAttachmentCount = 0;
 
     std::vector<VkSubpassDependency> subpass_dependencies;
 
@@ -706,6 +768,50 @@ class GraphicsPass : public Pass {
     render_pass_create_info.pSubpasses = &subpass_description;
     render_pass_create_info.dependencyCount = subpass_dependencies.size();
     render_pass_create_info.pDependencies = subpass_dependencies.data();
+
+    VkRenderPass vk_render_pass;
+    VK_RETURN_IF_FAILED(VkApi::get()->vkCreateRenderPass(
+        device_->vk_device(), &render_pass_create_info, nullptr, &vk_render_pass));
+
+    render_pass_ = core::make_refcounted<RenderPass>(device_, vk_render_pass);
+
+    return absl::OkStatus();
+  }
+
+  absl::Status compute_render_area() {
+    // 使用到的 images
+    std::unique_ptr<VkRect2D> render_area;
+    for (const auto &pair : builder_->color_attachments) {
+      VkRect2D t;
+
+      // get current color attachment's extent
+      if (pair.second.render_area) {
+        t = *pair.second.render_area;
+      } else {
+        // if render area is not config, set it by image's extent
+        t.offset.x = 0;
+        t.offset.y = 0;
+
+        auto image_extent = pair.second.image->image_extent();
+        t.extent.width = image_extent.width;
+        t.extent.height = image_extent.height;
+      }
+
+      if (render_area) {
+        CHECK_EQ(render_area->offset.x, t.offset.x);
+        CHECK_EQ(render_area->offset.y, t.offset.y);
+        CHECK(render_area->extent.width == t.extent.width);
+        CHECK(render_area->extent.height == t.extent.height);
+      } else {
+        render_area = std::make_unique<VkRect2D>(t);
+      }
+    }
+
+    CHECK(render_area != nullptr);
+
+    render_area_ = *render_area;
+
+    VLOG(10) << "[compute_render_area] render_area: " << absl::StrFormat("%v", render_area_);
 
     return absl::OkStatus();
   }
@@ -737,13 +843,14 @@ class GraphicsPass : public Pass {
 
   core::RefCountPtr<Device> device_;
   core::RefCountPtr<RenderPass> render_pass_;
-  core::RefCountPtr<Pipeline> pipeline_;
-  core::RefCountPtr<PipelineLayout> pipeline_layout_;
   core::RefCountPtr<Framebuffer> framebuffer_;
 
   int32_t attachment_count_ = 0;
 
   VkRect2D render_area_;
+
+  core::RefCountPtr<Pipeline> pipeline_;
+  core::RefCountPtr<PipelineLayout> pipeline_layout_;
 };
 
 class RenderGraphImpl : public core::Inherit<RenderGraphImpl, RenderGraph> {
@@ -814,6 +921,8 @@ class RenderGraphImpl : public core::Inherit<RenderGraphImpl, RenderGraph> {
     LANCE_RETURN_IF_FAILED(setup_fn(builder.get()));
 
     auto graphics_pass = std::make_unique<GraphicsPass>(std::move(builder), std::move(execute_fn));
+
+    passes_.push_back(std::move(graphics_pass));
 
     return absl::OkStatus();
   }

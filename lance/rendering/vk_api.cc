@@ -1,5 +1,7 @@
 #include "vk_api.h"
 
+#include <unordered_set>
+
 #include "absl/strings/str_format.h"
 #include "glog/logging.h"
 
@@ -171,6 +173,33 @@ std::string VkResult_name(VkResult ret_code) {
       return absl::StrFormat("UnknownError, ret_code: %d", static_cast<int32_t>(ret_code));
     }
   }
+}
+
+std::string VkFormat_name(VkFormat f) {
+  switch (f) {
+#define FORMAT_NAME(NAME) \
+  case NAME: {            \
+    return #NAME;         \
+  }
+
+    FORMAT_NAME(VK_FORMAT_R8G8B8A8_SNORM);
+    FORMAT_NAME(VK_FORMAT_R8G8B8A8_UNORM);
+
+#undef FORMAT_NAME
+
+    default: {
+      return "unknownformat";
+    } break;
+  }
+}
+
+bool is_depth_stencil_supported(VkFormat f) {
+  static const std::unordered_set<VkFormat> s = {
+      VK_FORMAT_D16_UNORM,  VK_FORMAT_D16_UNORM_S8_UINT,  VK_FORMAT_D24_UNORM_S8_UINT,
+      VK_FORMAT_D32_SFLOAT, VK_FORMAT_D32_SFLOAT_S8_UINT,
+  };
+
+  return s.find(f) != s.end();
 }
 }  // namespace rendering
 }  // namespace lance

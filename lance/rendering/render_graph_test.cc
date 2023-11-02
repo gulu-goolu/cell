@@ -139,18 +139,38 @@ void main() {
 TEST(render_graph, depth_test) {
   auto rg = create_render_graph(test_device()).value();
 
-  auto depth_buffer =
-      rg->create_texture2d("depth-buffer", VK_FORMAT_D32_SFLOAT, {640, 480}).value();
+  auto color0 = rg->create_texture2d("depth-buffer", VK_FORMAT_R8G8B8A8_SNORM, {640, 480}).value();
 
   LANCE_THROW_IF_FAILED(rg->add_graphics_pass(
       "DepthPass",
-      [depth_buffer](GraphicsPassBuilder* builder) -> absl::Status {
-        builder->set_depth_stencil_attachment(
-            depth_buffer, AttachmentDescription().set_format(VK_FORMAT_R32_SFLOAT));
+      [color0](GraphicsPassBuilder* builder) -> absl::Status {
+        builder->set_shader_by_glsl(VK_SHADER_STAGE_VERTEX_BIT, R"glsl(
+#version 450 core
+
+void main() {}
+)glsl");
+
+        builder->set_shader_by_glsl(VK_SHADER_STAGE_FRAGMENT_BIT, R"glsl(
+#version 450 core
+
+layout(location = 0) out vec4 outColor;
+
+void main() {
+  outColor = vec4(1,1,0,1);
+}
+)glsl");
+
+        builder->add_color_attachment(
+            color0, 0,
+            AttachmentDescription(color0.get())
+                .set_final_layout(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL)
+                .set_initial_layout(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL));
 
         return absl::OkStatus();
       },
       [](Context* ctx) -> absl::Status { return absl::OkStatus(); }));
+
+  LANCE_THROW_IF_FAILED(rg->compile());
 }
 }  // namespace rendering
 }  // namespace lance

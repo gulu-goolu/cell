@@ -22,6 +22,8 @@ class RenderGraphImage : public core::Inherit<RenderGraphImage, RenderGraphResou
   virtual VkImageView image_view() const = 0;
 
   virtual VkExtent3D image_extent() const = 0;
+
+  virtual VkFormat format() const = 0;
 };
 
 class PassBuilder {
@@ -61,21 +63,13 @@ struct VertexInputAttribute {
 };
 
 struct AttachmentDescription {
-  AttachmentDescription() {
-    description = VkAttachmentDescription{
-        0,
-        VK_FORMAT_UNDEFINED,
-        VK_SAMPLE_COUNT_1_BIT,
-        VK_ATTACHMENT_LOAD_OP_LOAD,
-        VK_ATTACHMENT_STORE_OP_STORE,
-        VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-        VK_ATTACHMENT_STORE_OP_DONT_CARE,
-        VK_IMAGE_LAYOUT_UNDEFINED,
-        VK_IMAGE_LAYOUT_UNDEFINED,
-    };
+  AttachmentDescription(RenderGraphImage* image) {
+    set_default_value();
 
-    clear_value = {};
+    set_format(image->format());
   }
+
+  AttachmentDescription() { set_default_value(); }
 
   AttachmentDescription& set_format(VkFormat f) {
     description.format = f;
@@ -111,6 +105,23 @@ struct AttachmentDescription {
 
   VkAttachmentDescription description;
   VkClearValue clear_value;
+
+ private:
+  void set_default_value() {
+    description = VkAttachmentDescription{
+        0,
+        VK_FORMAT_UNDEFINED,
+        VK_SAMPLE_COUNT_1_BIT,
+        VK_ATTACHMENT_LOAD_OP_LOAD,
+        VK_ATTACHMENT_STORE_OP_STORE,
+        VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+        VK_ATTACHMENT_STORE_OP_DONT_CARE,
+        VK_IMAGE_LAYOUT_UNDEFINED,
+        VK_IMAGE_LAYOUT_UNDEFINED,
+    };
+
+    clear_value = {};
+  }
 };
 
 struct DepthStencilState {

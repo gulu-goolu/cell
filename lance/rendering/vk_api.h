@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "absl/status/statusor.h"
+#include "absl/strings/str_format.h"
 #include "vulkan/vulkan_core.h"
 
 namespace lance {
@@ -97,8 +98,25 @@ class VkApi {
 };
 
 std::string VkResult_name(VkResult ret_code);
+
+std::string VkFormat_name(VkFormat f);
+
+bool is_depth_stencil_supported(VkFormat f);
+
 }  // namespace rendering
 }  // namespace lance
+
+template <typename Sink>
+inline void AbslStringify(Sink& sink, const VkRect2D& t) {
+  absl::Format(&sink, "<VkRect2D offset: (%d,%d), extent: (%d,%d)>", t.offset.x, t.offset.y,
+               t.extent.width, t.extent.height);
+}
+
+template <typename Sink>
+inline void AbslStringify(Sink& sink, const VkVertexInputBindingDescription& v) {
+  return absl::StrFormat(&sink, "<binding:%d,stride:%d,input_rate:%s>", v.binding, v.stride,
+                         v.inputRate);
+}
 
 #define VK_RETURN_IF_FAILED(EXPR)                                                                \
   do {                                                                                           \

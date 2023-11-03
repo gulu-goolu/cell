@@ -708,7 +708,10 @@ class GraphicsPass : public Pass {
 
     GraphicsContext ctx(this, command_buffer);
 
-    LANCE_RETURN_IF_FAILED(begin_render_pass(command_buffer->vk_command_buffer()));
+    LANCE_RETURN_IF_FAILED(begin_render_pass(command_buffer));
+
+    VkApi::get()->vkCmdBindPipeline(command_buffer->vk_command_buffer(),
+                                    VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_->vk_pipeline());
 
     LANCE_RETURN_IF_FAILED(execute_fn_(&ctx));
 
@@ -823,25 +826,46 @@ class GraphicsPass : public Pass {
     return absl::OkStatus();
   }
 
-  absl::Status begin_render_pass(VkCommandBuffer vk_command_buffer) {
+  absl::Status begin_render_pass(CommandBuffer *command_buffer) {
     std::vector<VkClearValue> clear_values;
+    std::vector<VkImageView> image_views;
+
     clear_values.resize(attachment_count_);
+    image_views.resize(attachment_count_);
 
     for (const auto &pair : builder_->color_attachments) {
       clear_values[pair.first] = pair.second.description.clear_value;
+      image_views[pair.first] = pair.second.image->image_view();
     }
 
     VLOG(10) << "[begin_render_pass] clear_values: ";
 
+    VkFramebufferCreateInfo framebuffer_create_info = {};
+    framebuffer_create_info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+    framebuffer_create_info.renderPass = render_pass_->vk_render_pass();
+    framebuffer_create_info.attachmentCount = attachment_count_;
+    framebuffer_create_info.pAttachments = image_views.data();
+    framebuffer_create_info.width = render_area_.extent.width;
+    framebuffer_create_info.height = render_area_.extent.height;
+    framebuffer_create_info.layers = 1;
+
+    VkFramebuffer vk_framebuffer;
+    VK_RETURN_IF_FAILED(VkApi::get()->vkCreateFramebuffer(
+        device_->vk_device(), &framebuffer_create_info, nullptr, &vk_framebuffer));
+
+    auto framebuffer = core::make_refcounted<Framebuffer>(device_, vk_framebuffer);
+
+    LANCE_RETURN_IF_FAILED(command_buffer->add_temporary_resource(framebuffer));
+
     VkRenderPassBeginInfo render_pass_begin_info = {};
     render_pass_begin_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
     render_pass_begin_info.renderPass = render_pass_->vk_render_pass();
-    render_pass_begin_info.framebuffer = framebuffer_->vk_framebuffer();
+    render_pass_begin_info.framebuffer = vk_framebuffer;
     render_pass_begin_info.renderArea = render_area_;
     render_pass_begin_info.clearValueCount = clear_values.size();
     render_pass_begin_info.pClearValues = clear_values.data();
 
-    VkApi::get()->vkCmdBeginRenderPass(vk_command_buffer, &render_pass_begin_info,
+    VkApi::get()->vkCmdBeginRenderPass(command_buffer->vk_command_buffer(), &render_pass_begin_info,
                                        VK_SUBPASS_CONTENTS_INLINE);
 
     return absl::OkStatus();
@@ -852,7 +876,6 @@ class GraphicsPass : public Pass {
 
   core::RefCountPtr<Device> device_;
   core::RefCountPtr<RenderPass> render_pass_;
-  core::RefCountPtr<Framebuffer> framebuffer_;
 
   int32_t attachment_count_ = 0;
 

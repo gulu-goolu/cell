@@ -150,7 +150,15 @@ TEST(render_graph, depth_test) {
         builder->set_shader_by_glsl(VK_SHADER_STAGE_VERTEX_BIT, R"glsl(
 #version 450 core
 
-void main() {}
+vec2 positions[3] = {
+  vec2(0,0),
+  vec2(0,-1),
+  vec2(1,0),
+};
+
+void main() {
+  gl_Position = vec4(positions[gl_VertexIndex], 0, 1);
+}
 )glsl");
 
         builder->set_shader_by_glsl(VK_SHADER_STAGE_FRAGMENT_BIT, R"glsl(
@@ -171,7 +179,14 @@ void main() {
 
         return absl::OkStatus();
       },
-      [](Context* ctx) -> absl::Status { return absl::OkStatus(); }));
+      [](Context* ctx) -> absl::Status {
+        ctx->set_viewport(0, {VkViewport{0, 0, 640.f, 480.f, 0.f, 1.f}});
+        ctx->set_scissors(0, {VkRect2D{{0, 0}, {640, 480}}});
+
+        ctx->draw(3, 1, 0, 0);
+
+        return absl::OkStatus();
+      }));
 
   LANCE_THROW_IF_FAILED(rg->compile());
 
@@ -180,7 +195,18 @@ void main() {
   auto command_buffer =
       command_pool->allocate_command_buffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY).value();
 
+  LANCE_THROW_IF_FAILED(command_buffer->begin());
+
   auto st_v1 = rg->execute(command_buffer.get(), {});
+
+  LANCE_THROW_IF_FAILED(command_buffer->end());
+
+  render_doc_begin_capture();
+
+  LANCE_THROW_IF_FAILED(
+      test_device()->submit(graphics_queue_family_index, {command_buffer->vk_command_buffer()}));
+
+  render_doc_end_capture();
 }
 }  // namespace rendering
 }  // namespace lance

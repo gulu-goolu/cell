@@ -193,6 +193,22 @@ std::string VkFormat_name(VkFormat f) {
   }
 }
 
+std::string VkVertexInputRate_name(VkVertexInputRate rate) {
+  switch (rate) {
+    case VK_VERTEX_INPUT_RATE_INSTANCE: {
+      return "VK_VERTEX_INPUT_RATE_INSTANCE";
+    } break;
+
+    case VK_VERTEX_INPUT_RATE_VERTEX: {
+      return "VK_VERTEX_INPUT_RATE_VERTEX";
+    } break;
+
+    default: {
+      return absl::StrFormat("<VkVertexInputRate %d>", rate);
+    } break;
+  }
+}
+
 bool is_depth_stencil_supported(VkFormat f) {
   static const std::unordered_set<VkFormat> s = {
       VK_FORMAT_D16_UNORM,  VK_FORMAT_D16_UNORM_S8_UINT,  VK_FORMAT_D24_UNORM_S8_UINT,

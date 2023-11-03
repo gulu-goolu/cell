@@ -415,6 +415,12 @@ absl::Status CommandBuffer::end() {
   return absl::OkStatus();
 }
 
+absl::Status CommandBuffer::add_temporary_resource(core::RefCountPtr<core::Object> resource) {
+  temporary_resources_.push_back(resource);
+
+  return absl::OkStatus();
+}
+
 Framebuffer::~Framebuffer() {
   if (vk_framebuffer_) {
     VkApi::get()->vkDestroyFramebuffer(device_->vk_device(), vk_framebuffer_, nullptr);

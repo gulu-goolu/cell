@@ -217,7 +217,9 @@ class Context {
  public:
   virtual ~Context() = default;
 
-  virtual VkCommandBuffer vk_command_buffer() const = 0;
+  VkCommandBuffer vk_command_buffer() const { return command_buffer()->vk_command_buffer(); }
+
+  virtual CommandBuffer* command_buffer() const = 0;
   virtual VkPipeline vk_pipeline() const = 0;
   virtual VkPipelineLayout vk_pipeline_layout() const = 0;
 
@@ -271,7 +273,7 @@ class RenderGraph : public core::Inherit<RenderGraph, core::Object> {
   virtual absl::Status compile(const CompileOptions* options = nullptr) = 0;
 
   virtual absl::Status execute(
-      VkCommandBuffer command_buffer,
+      CommandBuffer* command_buffer,
       absl::Span<const std::pair<std::string, core::RefCountPtr<RenderGraphResource>>> inputs) = 0;
 };
 

@@ -76,7 +76,7 @@ void main() {
 
   LANCE_THROW_IF_FAILED(command_buffer->begin());
 
-  LANCE_THROW_IF_FAILED(rg->execute(command_buffer->vk_command_buffer(), {}));
+  LANCE_THROW_IF_FAILED(rg->execute(command_buffer.get(), {}));
 
   LANCE_THROW_IF_FAILED(command_buffer->end());
 
@@ -137,6 +137,9 @@ void main() {
 }
 
 TEST(render_graph, depth_test) {
+  auto graphics_queue_family_index =
+      test_device()->find_queue_family_index(VK_QUEUE_GRAPHICS_BIT).value();
+
   auto rg = create_render_graph(test_device()).value();
 
   auto color0 = rg->create_texture2d("depth-buffer", VK_FORMAT_R8G8B8A8_SNORM, {640, 480}).value();
@@ -171,6 +174,13 @@ void main() {
       [](Context* ctx) -> absl::Status { return absl::OkStatus(); }));
 
   LANCE_THROW_IF_FAILED(rg->compile());
+
+  auto command_pool = CommandPool::create(test_device(), graphics_queue_family_index).value();
+
+  auto command_buffer =
+      command_pool->allocate_command_buffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY).value();
+
+  auto st_v1 = rg->execute(command_buffer.get(), {});
 }
 }  // namespace rendering
 }  // namespace lance

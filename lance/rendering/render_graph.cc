@@ -125,9 +125,11 @@ class Pass {
  public:
   virtual ~Pass() = default;
 
+  virtual std::string_view name() const = 0;
+
   virtual absl::Status compile(Device *device) = 0;
 
-  virtual absl::Status execute(VkCommandBuffer cmd) = 0;
+  virtual absl::Status execute(CommandBuffer *command_buffer) = 0;
 };
 
 class ComputePass : public Pass {
@@ -139,15 +141,16 @@ class ComputePass : public Pass {
 
   absl::Status compile(Device *device) override { return absl::OkStatus(); }
 
-  absl::Status execute(VkCommandBuffer cmd) override {
-    VkApi::get()->vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline_->vk_pipeline());
+  absl::Status execute(CommandBuffer *command_buffer) override {
+    VkApi::get()->vkCmdBindPipeline(command_buffer->vk_command_buffer(),
+                                    VK_PIPELINE_BIND_POINT_COMPUTE, pipeline_->vk_pipeline());
 
     class ContextImpl : public Context {
      public:
-      ContextImpl(ComputePass *pass, VkCommandBuffer vk_command_buffer)
-          : pass_(pass), vk_command_buffer_(vk_command_buffer) {}
+      ContextImpl(ComputePass *pass, CommandBuffer *command_buffer)
+          : pass_(pass), command_buffer_(command_buffer) {}
 
-      VkCommandBuffer vk_command_buffer() const override { return vk_command_buffer_; }
+      CommandBuffer *command_buffer() const override { return command_buffer_; }
       VkPipeline vk_pipeline() const override { return pass_->pipeline_->vk_pipeline(); }
       VkPipelineLayout vk_pipeline_layout() const override {
         return pass_->pipeline_layout_->vk_pipeline_layout();
@@ -155,12 +158,14 @@ class ComputePass : public Pass {
 
      private:
       ComputePass *pass_ = nullptr;
-      VkCommandBuffer vk_command_buffer_{VK_NULL_HANDLE};
+      CommandBuffer *command_buffer_{VK_NULL_HANDLE};
     };
 
-    ContextImpl ctx(this, cmd);
+    ContextImpl ctx(this, command_buffer);
     return execute_fn_(&ctx);
   }
+
+  std::string_view name() const override { return "ComputePass"; }
 
  private:
   const std::function<absl::Status(Context *)> execute_fn_;
@@ -684,13 +689,13 @@ class GraphicsPass : public Pass {
     return absl::OkStatus();
   }
 
-  absl::Status execute(VkCommandBuffer vk_command_buffer) override {
+  absl::Status execute(CommandBuffer *command_buffer) override {
     class GraphicsContext : public Context {
      public:
-      GraphicsContext(GraphicsPass *pass, VkCommandBuffer vk_command_buffer)
-          : pass_(pass), vk_command_buffer_(vk_command_buffer) {}
+      GraphicsContext(GraphicsPass *pass, CommandBuffer *command_buffer)
+          : pass_(pass), command_buffer_(command_buffer) {}
 
-      VkCommandBuffer vk_command_buffer() const override { return vk_command_buffer_; }
+      CommandBuffer *command_buffer() const override { return command_buffer_; }
       VkPipeline vk_pipeline() const override { return pass_->pipeline_->vk_pipeline(); }
       VkPipelineLayout vk_pipeline_layout() const override {
         return pass_->pipeline_layout_->vk_pipeline_layout();
@@ -698,19 +703,21 @@ class GraphicsPass : public Pass {
 
      private:
       GraphicsPass *pass_ = nullptr;
-      VkCommandBuffer vk_command_buffer_{VK_NULL_HANDLE};
+      CommandBuffer *command_buffer_ = nullptr;
     };
 
-    GraphicsContext ctx(this, vk_command_buffer);
+    GraphicsContext ctx(this, command_buffer);
 
-    LANCE_RETURN_IF_FAILED(begin_render_pass(vk_command_buffer));
+    LANCE_RETURN_IF_FAILED(begin_render_pass(command_buffer->vk_command_buffer()));
 
     LANCE_RETURN_IF_FAILED(execute_fn_(&ctx));
 
-    VkApi::get()->vkCmdEndRenderPass(vk_command_buffer);
+    VkApi::get()->vkCmdEndRenderPass(command_buffer->vk_command_buffer());
 
     return absl::OkStatus();
   }
+
+  std::string_view name() const override { return "GraphicsPass"; }
 
  private:
   absl::Status create_render_pass() {
@@ -823,6 +830,8 @@ class GraphicsPass : public Pass {
     for (const auto &pair : builder_->color_attachments) {
       clear_values[pair.first] = pair.second.description.clear_value;
     }
+
+    VLOG(10) << "[begin_render_pass] clear_values: ";
 
     VkRenderPassBeginInfo render_pass_begin_info = {};
     render_pass_begin_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
@@ -960,10 +969,12 @@ class RenderGraphImpl : public core::Inherit<RenderGraphImpl, RenderGraph> {
   }
 
   absl::Status execute(
-      VkCommandBuffer command_buffer,
+      CommandBuffer *command_buffer,
       absl::Span<const std::pair<std::string, core::RefCountPtr<RenderGraphResource>>> inputs)
       override {
     for (auto &pass : passes_) {
+      VLOG(1) << "[execute] pass: " << pass->name();
+
       LANCE_RETURN_IF_FAILED(pass->execute(command_buffer));
     }
 

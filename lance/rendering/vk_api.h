@@ -101,6 +101,8 @@ std::string VkResult_name(VkResult ret_code);
 
 std::string VkFormat_name(VkFormat f);
 
+std::string VkVertexInputRate_name(VkVertexInputRate rate);
+
 bool is_depth_stencil_supported(VkFormat f);
 
 }  // namespace rendering
@@ -115,7 +117,7 @@ inline void AbslStringify(Sink& sink, const VkRect2D& t) {
 template <typename Sink>
 inline void AbslStringify(Sink& sink, const VkVertexInputBindingDescription& v) {
   return absl::StrFormat(&sink, "<binding:%d,stride:%d,input_rate:%s>", v.binding, v.stride,
-                         v.inputRate);
+                         lance::rendering::VkVertexInputRate_name(v.inputRate));
 }
 
 #define VK_RETURN_IF_FAILED(EXPR)                                                                \

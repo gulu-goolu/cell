@@ -230,9 +230,13 @@ class CommandBuffer : public core::Inherit<CommandBuffer, core::Object> {
   absl::Status begin();
   absl::Status end();
 
+  absl::Status add_temporary_resource(core::RefCountPtr<core::Object> resource);
+
  private:
   core::RefCountPtr<CommandPool> command_pool_;
   VkCommandBuffer vk_command_buffer_{VK_NULL_HANDLE};
+
+  std::vector<core::RefCountPtr<core::Object>> temporary_resources_;
 };
 
 class Framebuffer : public core::Inherit<Framebuffer, core::Object> {

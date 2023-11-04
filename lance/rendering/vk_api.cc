@@ -126,6 +126,10 @@ VkApi::VkApi() {
   VK_API_LOAD(vkCmdSetBlendConstants);
   VK_API_LOAD(vkCmdClearAttachments);
   VK_API_LOAD(vkBindImageMemory);
+  VK_API_LOAD(vkCmdCopyBuffer);
+  VK_API_LOAD(vkCmdCopyImage);
+  VK_API_LOAD(vkCmdCopyBufferToImage);
+  VK_API_LOAD(vkCmdCopyImageToBuffer);
 
 #undef VK_API_LOAD
 }

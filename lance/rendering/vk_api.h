@@ -83,6 +83,10 @@ class VkApi {
   VK_API_DEFINE(vkCmdSetBlendConstants);
   VK_API_DEFINE(vkCmdClearAttachments);
   VK_API_DEFINE(vkBindImageMemory);
+  VK_API_DEFINE(vkCmdCopyBuffer);
+  VK_API_DEFINE(vkCmdCopyImage);
+  VK_API_DEFINE(vkCmdCopyBufferToImage);
+  VK_API_DEFINE(vkCmdCopyImageToBuffer);
 
 #undef VK_API_DEFINE
 

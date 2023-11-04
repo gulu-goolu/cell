@@ -838,7 +838,8 @@ class GraphicsPass : public Pass {
       image_views[pair.first] = pair.second.image->image_view();
     }
 
-    VLOG(10) << "[begin_render_pass] clear_values: ";
+    VLOG(10) << "[begin_render_pass] clear_values: "
+             << ", attachment_count: " << attachment_count_;
 
     VkFramebufferCreateInfo framebuffer_create_info = {};
     framebuffer_create_info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
@@ -957,24 +958,6 @@ class RenderGraphImpl : public core::Inherit<RenderGraphImpl, RenderGraph> {
     passes_.push_back(std::move(graphics_pass));
 
     return absl::OkStatus();
-  }
-
-  absl::Status add_pass(const std::string &name, VkPipelineBindPoint bind_point,
-                        core::RefCountPtr<IPass> pass) override {
-    if (bind_point == VK_PIPELINE_BIND_POINT_GRAPHICS) {
-      LANCE_RETURN_IF_FAILED(add_graphics_pass(
-          name,
-          [pass](GraphicsPassBuilder *builder) -> absl::Status { return pass->setup(builder); },
-          [pass](Context *ctx) -> absl::Status { return pass->execute(ctx); }));
-
-    } else if (bind_point == VK_PIPELINE_BIND_POINT_COMPUTE) {
-      LANCE_RETURN_IF_FAILED(add_compute_pass(
-          name,
-          [pass](ComputePassBuilder *builder) -> absl::Status { return pass->setup(builder); },
-          [pass](Context *ctx) -> absl::Status { return pass->execute(ctx); }));
-    }
-
-    return absl::InvalidArgumentError(absl::StrFormat("unsupported bind point, %d", bind_point));
   }
 
   absl::Status compile(const CompileOptions *options) override {

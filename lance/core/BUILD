@@ -1,7 +1,11 @@
 cc_library(
     name = "core",
-    srcs = ["object.cc"],
+    srcs = [
+        "file_system.cc",
+        "object.cc",
+    ],
     hdrs = [
+        "file_system.h",
         "math.h",
         "object.h",
         "util.h",

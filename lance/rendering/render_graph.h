@@ -263,9 +263,6 @@ class RenderGraph : public core::Inherit<RenderGraph, core::Object> {
                                          std::function<absl::Status(GraphicsPassBuilder*)> setup_fn,
                                          std::function<absl::Status(Context*)> execute_fn) = 0;
 
-  virtual absl::Status add_pass(const std::string& name, VkPipelineBindPoint bind_point,
-                                core::RefCountPtr<IPass> pass) = 0;
-
   struct CompileOptions {
     bool enable_pass_fusion = true;
   };

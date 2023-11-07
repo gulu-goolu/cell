@@ -9,5 +9,8 @@ cc_library(
         "scene.h",
     ],
     visibility = ["//visibility:public"],
-    deps = ["//lance/core"],
+    deps = [
+        "//lance/core",
+        "//lance/rendering",
+    ],
 )

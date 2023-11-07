@@ -21,7 +21,9 @@ class Transform : public core::Inherit<Transform, core::Object> {
   core::matrix4x4 world_to_local_;
 };
 
-class Geometry : public core::Inherit<Geometry, core::Object> {};
+class Geometry : public core::Inherit<Geometry, core::Object> {
+ public:
+};
 
 class Camera : public core::Inherit<Camera, core::Object> {};
 

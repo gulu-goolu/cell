@@ -267,5 +267,30 @@ class RenderPass : public core::Inherit<RenderPass, core::Object> {
   VkRenderPass vk_render_pass_{VK_NULL_HANDLE};
 };
 
+class DescriptorPool : public core::Inherit<DescriptorPool, core::Object> {
+ public:
+  ~DescriptorPool();
+
+  Device* device() const { return device_.get(); }
+
+  VkDescriptorPool vk_descriptor_pool() const { return vk_descriptor_pool_; }
+
+ private:
+  core::RefCountPtr<Device> device_;
+  VkDescriptorPool vk_descriptor_pool_{VK_NULL_HANDLE};
+};
+
+class DescriptorSet : public core::Inherit<DescriptorSet, core::Object> {
+ public:
+  VkDescriptorSet vk_descriptor_set() const { return vk_descriptor_set_; }
+
+  ~DescriptorSet();
+
+ private:
+  core::RefCountPtr<DescriptorPool> pool_;
+
+  VkDescriptorSet vk_descriptor_set_{VK_NULL_HANDLE};
+};
+
 }  // namespace rendering
 }  // namespace lance

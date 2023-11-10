@@ -92,6 +92,11 @@ class VkApi {
   VK_API_DEFINE(vkCmdSetEvent);
   VK_API_DEFINE(vkCmdWaitEvents);
   VK_API_DEFINE(vkResetEvent);
+  VK_API_DEFINE(vkAllocateDescriptorSets);
+  VK_API_DEFINE(vkFreeDescriptorSets);
+  VK_API_DEFINE(vkUpdateDescriptorSets);
+  VK_API_DEFINE(vkDestroyDescriptorPool);
+  VK_API_DEFINE(vkCreateDescriptorPool);
 
 #undef VK_API_DEFINE
 

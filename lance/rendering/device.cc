@@ -432,5 +432,18 @@ RenderPass::~RenderPass() {
     VkApi::get()->vkDestroyRenderPass(device_->vk_device(), vk_render_pass_, nullptr);
   }
 }
+
+DescriptorPool::~DescriptorPool() {
+  if (vk_descriptor_pool_) {
+    VkApi::get()->vkDestroyDescriptorPool(device_->vk_device(), vk_descriptor_pool_, nullptr);
+  }
+}
+
+DescriptorSet::~DescriptorSet() {
+  if (vk_descriptor_set_) {
+    VkApi::get()->vkFreeDescriptorSets(pool_->device()->vk_device(), pool_->vk_descriptor_pool(), 1,
+                                       &vk_descriptor_set_);
+  }
+}
 }  // namespace rendering
 }  // namespace lance

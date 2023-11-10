@@ -135,6 +135,11 @@ VkApi::VkApi() {
   VK_API_LOAD(vkCmdSetEvent);
   VK_API_LOAD(vkCmdWaitEvents);
   VK_API_LOAD(vkResetEvent);
+  VK_API_LOAD(vkAllocateDescriptorSets);
+  VK_API_LOAD(vkFreeDescriptorSets);
+  VK_API_LOAD(vkUpdateDescriptorSets);
+  VK_API_LOAD(vkDestroyDescriptorPool);
+  VK_API_LOAD(vkCreateDescriptorPool);
 
 #undef VK_API_LOAD
 }

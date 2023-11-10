@@ -87,6 +87,11 @@ class VkApi {
   VK_API_DEFINE(vkCmdCopyImage);
   VK_API_DEFINE(vkCmdCopyBufferToImage);
   VK_API_DEFINE(vkCmdCopyImageToBuffer);
+  VK_API_DEFINE(vkCreateEvent);
+  VK_API_DEFINE(vkDestroyEvent);
+  VK_API_DEFINE(vkCmdSetEvent);
+  VK_API_DEFINE(vkCmdWaitEvents);
+  VK_API_DEFINE(vkResetEvent);
 
 #undef VK_API_DEFINE
 

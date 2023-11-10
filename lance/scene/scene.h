@@ -1,6 +1,6 @@
 #pragma once
 
-#include "lance/core/math.h"
+#include "lance/core/linalg.h"
 #include "lance/core/object.h"
 
 namespace lance {

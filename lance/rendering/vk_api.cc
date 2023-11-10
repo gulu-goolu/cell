@@ -130,6 +130,11 @@ VkApi::VkApi() {
   VK_API_LOAD(vkCmdCopyImage);
   VK_API_LOAD(vkCmdCopyBufferToImage);
   VK_API_LOAD(vkCmdCopyImageToBuffer);
+  VK_API_LOAD(vkCreateEvent);
+  VK_API_LOAD(vkDestroyEvent);
+  VK_API_LOAD(vkCmdSetEvent);
+  VK_API_LOAD(vkCmdWaitEvents);
+  VK_API_LOAD(vkResetEvent);
 
 #undef VK_API_LOAD
 }

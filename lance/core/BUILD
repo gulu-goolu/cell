@@ -6,7 +6,7 @@ cc_library(
     ],
     hdrs = [
         "file_system.h",
-        "math.h",
+        "linalg.h",
         "object.h",
         "util.h",
     ],

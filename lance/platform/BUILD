@@ -15,7 +15,10 @@ cc_library(
         ],
         "//conditions:default": [],
     }),
-    deps = ["@com_google_absl//absl/status"],
+    deps = [
+        "//lance/rendering",
+        "@com_google_absl//absl/status",
+    ],
 )
 
 cc_test(

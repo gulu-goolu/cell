@@ -1,7 +1,35 @@
 #include "app.h"
 
 #include "glfw/glfw3.h"
+#include "glog/logging.h"
 #include "lance/core/util.h"
+#include "lance/rendering/vk_api.h"
+
+namespace {
+class StartupContextImpl : public ::lance::platform::StartupContext {
+ public:
+  VkSurfaceKHR vk_surface() const override { return vk_surface_; }
+
+  VkInstance vk_instance_{VK_NULL_HANDLE};
+  VkSurfaceKHR vk_surface_{VK_NULL_HANDLE};
+};
+
+VkInstance create_instance_or_die(const ::lance::platform::AppStartupOptions* options) {
+  uint32_t extension_count = 0;
+  const char* const* extensions = glfwGetRequiredInstanceExtensions(&extension_count);
+
+  VkInstance vk_instance = VK_NULL_HANDLE;
+  VkInstanceCreateInfo instance_create_info = {};
+  instance_create_info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
+  instance_create_info.enabledExtensionCount = extension_count;
+  instance_create_info.ppEnabledExtensionNames = extensions;
+  CHECK(::lance::rendering::VkApi::get()->vkCreateInstance(&instance_create_info, nullptr,
+                                                           &vk_instance) == VK_SUCCESS);
+
+  return vk_instance;
+}
+
+}  // namespace
 
 int main(int argc, char* argv[]) {
   if (glfwInit() != GLFW_TRUE) {
@@ -12,6 +40,35 @@ int main(int argc, char* argv[]) {
 
   ::lance::platform::AppStartupOptions startup_options;
   LANCE_THROW_IF_FAILED(app->fill_startup_options(&startup_options));
+
+  glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+  auto window = glfwCreateWindow(startup_options.width, startup_options.height,
+                                 startup_options.title, nullptr, nullptr);
+  CHECK(window != nullptr);
+
+  StartupContextImpl startup_context;
+
+  // create instance
+  startup_context.vk_instance_ = create_instance_or_die(&startup_options);
+
+  // create surface
+  CHECK(glfwCreateWindowSurface(startup_context.vk_instance_, window, nullptr,
+                                &startup_context.vk_surface_) == VK_SUCCESS);
+
+  LANCE_THROW_IF_FAILED(app->startup(&startup_context));
+
+  // main loop
+  auto tp0 = std::chrono::steady_clock::now();
+  while (!glfwWindowShouldClose(window)) {
+    glfwPollEvents();
+
+    auto tp = std::chrono::steady_clock::now();
+    const float elapsed_ms = (tp - tp0).count() / 1.0e6;
+
+    LANCE_THROW_IF_FAILED(app->update(elapsed_ms));
+
+    tp0 = tp;
+  }
 
   return 0;
 }

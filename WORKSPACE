@@ -89,3 +89,11 @@ http_archive(
     strip_prefix = "json-3.11.2",
     urls = ["https://github.com/nlohmann/json/archive/refs/tags/v3.11.2.tar.gz"],
 )
+
+http_archive(
+    name = "glfw",
+    build_file = "//third_party:glfw.BUILD",
+    sha256 = "f30f42e05f11e5fc62483e513b0488d5bceeab7d9c5da0ffe2252ad81816c713",
+    strip_prefix = "glfw-3.3.8",
+    urls = ["https://github.com/glfw/glfw/archive/refs/tags/3.3.8.tar.gz"],
+)

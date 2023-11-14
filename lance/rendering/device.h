@@ -12,6 +12,7 @@ class Device;
 class ShaderModule;
 class CommandBuffer;
 class Buffer;
+class DescriptorSet;
 
 class Instance : public core::Inherit<Instance, core::Object> {
  public:
@@ -92,6 +93,7 @@ class DeviceMemory : public core::Inherit<DeviceMemory, core::Object> {
 class Buffer : public core::Inherit<Buffer, core::Object> {
  public:
   virtual Device* device() const = 0;
+
   virtual VkBuffer vk_buffer() const = 0;
 
   VkMemoryRequirements memory_requirements() const;
@@ -271,6 +273,9 @@ class DescriptorPool : public core::Inherit<DescriptorPool, core::Object> {
 
   VkDescriptorPool vk_descriptor_pool() const { return vk_descriptor_pool_; }
 
+  absl::StatusOr<core::RefCountPtr<DescriptorSet>> allocate_descriptor_set(
+      const DescriptorSetLayout* layout);
+
  private:
   core::RefCountPtr<Device> device_;
   VkDescriptorPool vk_descriptor_pool_{VK_NULL_HANDLE};
@@ -278,14 +283,7 @@ class DescriptorPool : public core::Inherit<DescriptorPool, core::Object> {
 
 class DescriptorSet : public core::Inherit<DescriptorSet, core::Object> {
  public:
-  VkDescriptorSet vk_descriptor_set() const { return vk_descriptor_set_; }
-
-  ~DescriptorSet();
-
- private:
-  core::RefCountPtr<DescriptorPool> pool_;
-
-  VkDescriptorSet vk_descriptor_set_{VK_NULL_HANDLE};
+  virtual VkDescriptorSet vk_descriptor_set() const = 0;
 };
 
 }  // namespace rendering

@@ -505,11 +505,40 @@ DescriptorPool::~DescriptorPool() {
   }
 }
 
-DescriptorSet::~DescriptorSet() {
-  if (vk_descriptor_set_) {
-    VkApi::get()->vkFreeDescriptorSets(pool_->device()->vk_device(), pool_->vk_descriptor_pool(), 1,
-                                       &vk_descriptor_set_);
-  }
+absl::StatusOr<core::RefCountPtr<DescriptorSet>> DescriptorPool::allocate_descriptor_set(
+    const DescriptorSetLayout *layout) {
+  const VkDescriptorSetLayout set_layouts[] = {layout->vk_descriptor_set_layout()};
+
+  VkDescriptorSet vk_descriptor_set{VK_NULL_HANDLE};
+
+  VkDescriptorSetAllocateInfo allocate_info = {};
+  allocate_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+  allocate_info.descriptorPool = vk_descriptor_pool_;
+  allocate_info.descriptorSetCount = 1;
+  allocate_info.pSetLayouts = set_layouts;
+  VK_RETURN_IF_FAILED(VkApi::get()->vkAllocateDescriptorSets(device_->vk_device(), &allocate_info,
+                                                             &vk_descriptor_set));
+
+  class DescriptorSetImpl : public core::Inherit<DescriptorSetImpl, DescriptorSet> {
+   public:
+    DescriptorSetImpl(core::RefCountPtr<DescriptorPool> pool, VkDescriptorSet vk_descriptor_set) {}
+
+    ~DescriptorSetImpl() override {
+      if (vk_descriptor_set_) {
+        VkApi::get()->vkFreeDescriptorSets(pool_->device()->vk_device(),
+                                           pool_->vk_descriptor_pool(), 1, &vk_descriptor_set_);
+      }
+    }
+
+    VkDescriptorSet vk_descriptor_set() const override { return vk_descriptor_set_; }
+
+   private:
+    core::RefCountPtr<DescriptorPool> pool_;
+    VkDescriptorSet vk_descriptor_set_{VK_NULL_HANDLE};
+  };
+
+  return core::make_refcounted<DescriptorSetImpl>(this, vk_descriptor_set);
 }
+
 }  // namespace rendering
 }  // namespace lance

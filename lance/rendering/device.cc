@@ -242,6 +242,78 @@ absl::StatusOr<uint32_t> Device::find_memory_type_index(uint32_t type_bits,
   return absl::NotFoundError(absl::StrFormat("no suitable memory found, flags: %d", type_bits));
 }
 
+absl::StatusOr<core::RefCountPtr<Buffer>> Device::create_buffer(
+    VkBufferUsageFlags usage, size_t size, VkMemoryPropertyFlags memory_property_flags) {
+  VkBuffer vk_buffer{VK_NULL_HANDLE};
+
+  VkBufferCreateInfo buffer_create_info = {};
+  buffer_create_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+  buffer_create_info.size = size;
+  buffer_create_info.usage = usage;
+  buffer_create_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+  VK_RETURN_IF_FAILED(
+      VkApi::get()->vkCreateBuffer(vk_device_, &buffer_create_info, nullptr, &vk_buffer));
+
+  LANCE_ON_SCOPE_EXIT([&]() {
+    if (vk_buffer) {
+      VkApi::get()->vkDestroyBuffer(vk_device_, vk_buffer, nullptr);
+    }
+  });
+
+  VkMemoryRequirements mem_req;
+  VkApi::get()->vkGetBufferMemoryRequirements(vk_device_, vk_buffer, &mem_req);
+
+  LANCE_ASSIGN_OR_RETURN(memory_type_index,
+                         find_memory_type_index(mem_req.memoryTypeBits, memory_property_flags));
+
+  VkDeviceMemory vk_device_memory{VK_NULL_HANDLE};
+  VkMemoryAllocateInfo memory_allocate_info = {};
+  memory_allocate_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+  memory_allocate_info.allocationSize = mem_req.size;
+  memory_allocate_info.memoryTypeIndex = memory_type_index;
+  VK_RETURN_IF_FAILED(VkApi::get()->vkAllocateMemory(vk_device_, &memory_allocate_info, nullptr,
+                                                     &vk_device_memory));
+
+  LANCE_ON_SCOPE_EXIT([&]() {
+    if (vk_device_memory) {
+      VkApi::get()->vkFreeMemory(vk_device_, vk_device_memory, nullptr);
+    }
+  });
+
+  VK_RETURN_IF_FAILED(VkApi::get()->vkBindBufferMemory(vk_device_, vk_buffer, vk_device_memory, 0));
+
+  class BufferOwnMemory : public Buffer {
+   public:
+    BufferOwnMemory(core::RefCountPtr<Device> device, VkBuffer vk_buffer,
+                    VkDeviceMemory device_memory)
+        : device_(device), vk_buffer_(vk_buffer), vk_device_memory_(device_memory) {}
+
+    ~BufferOwnMemory() {
+      if (vk_buffer_) {
+        VkApi::get()->vkDestroyBuffer(device_->vk_device(), vk_buffer_, nullptr);
+      }
+      if (vk_device_memory_) {
+        VkApi::get()->vkFreeMemory(device_->vk_device(), vk_device_memory_, nullptr);
+      }
+    }
+
+    Device *device() const override { return device_.get(); }
+    VkBuffer vk_buffer() const override { return vk_buffer_; }
+
+   private:
+    core::RefCountPtr<Device> device_;
+    VkBuffer vk_buffer_{VK_NULL_HANDLE};
+    VkDeviceMemory vk_device_memory_{VK_NULL_HANDLE};
+  };
+
+  auto result = core::make_refcounted<BufferOwnMemory>(this, vk_buffer, vk_device_memory);
+
+  vk_buffer = VK_NULL_HANDLE;
+  vk_device_memory = VK_NULL_HANDLE;
+
+  return result;
+}
+
 absl::StatusOr<core::RefCountPtr<DeviceMemory>> DeviceMemory::create(
     const core::RefCountPtr<Device> &device, uint32_t memory_type_index, size_t allocation_size) {
   VkDeviceMemory vk_device_memory{VK_NULL_HANDLE};
@@ -276,15 +348,9 @@ absl::Status DeviceMemory::unmap() {
   return absl::OkStatus();
 }
 
-Buffer::~Buffer() {
-  if (vk_buffer_) {
-    VkApi::get()->vkDestroyBuffer(device_->vk_device(), vk_buffer_, nullptr);
-  }
-}
-
 VkMemoryRequirements Buffer::memory_requirements() const {
   VkMemoryRequirements memory_requirements;
-  VkApi::get()->vkGetBufferMemoryRequirements(device_->vk_device(), vk_buffer_,
+  VkApi::get()->vkGetBufferMemoryRequirements(device()->vk_device(), vk_buffer(),
                                               &memory_requirements);
 
   return memory_requirements;

@@ -140,6 +140,8 @@ VkApi::VkApi() {
   VK_API_LOAD(vkUpdateDescriptorSets);
   VK_API_LOAD(vkDestroyDescriptorPool);
   VK_API_LOAD(vkCreateDescriptorPool);
+  VK_API_LOAD(vkCmdUpdateBuffer);
+  VK_API_LOAD(vkCmdPipelineBarrier);
 
 #undef VK_API_LOAD
 }

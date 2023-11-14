@@ -11,6 +11,7 @@ namespace rendering {
 class Device;
 class ShaderModule;
 class CommandBuffer;
+class Buffer;
 
 class Instance : public core::Inherit<Instance, core::Object> {
  public:
@@ -55,6 +56,9 @@ class Device : public core::Inherit<Device, core::Object> {
   absl::StatusOr<uint32_t> find_memory_type_index(uint32_t type_bits,
                                                   VkMemoryPropertyFlags flags) const;
 
+  absl::StatusOr<core::RefCountPtr<Buffer>> create_buffer(
+      VkBufferUsageFlags usage, size_t size, VkMemoryPropertyFlags memory_property_flags);
+
  private:
   core::RefCountPtr<Instance> instance_;
   VkPhysicalDevice vk_physical_device_{VK_NULL_HANDLE};
@@ -87,18 +91,10 @@ class DeviceMemory : public core::Inherit<DeviceMemory, core::Object> {
 
 class Buffer : public core::Inherit<Buffer, core::Object> {
  public:
-  Buffer(core::RefCountPtr<Device> device, VkBuffer vk_buffer)
-      : device_(device), vk_buffer_(vk_buffer) {}
-
-  ~Buffer();
-
-  VkBuffer vk_buffer() const { return vk_buffer_; }
+  virtual Device* device() const = 0;
+  virtual VkBuffer vk_buffer() const = 0;
 
   VkMemoryRequirements memory_requirements() const;
-
- private:
-  core::RefCountPtr<Device> device_;
-  VkBuffer vk_buffer_{VK_NULL_HANDLE};
 };
 
 class Image : public core::Inherit<Image, core::Object> {

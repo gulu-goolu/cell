@@ -10,6 +10,9 @@ cc_library(
         "mesh.h",
         "scene.h",
     ],
+    implementation_deps = [
+        "@com_github_nlohmann_json//:json",
+    ],
     visibility = ["//visibility:public"],
     deps = [
         "//lance/core",

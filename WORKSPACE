@@ -82,3 +82,10 @@ new_local_repository(
     build_file = "//third_party:renderdoc_app.BUILD",
     path = "third_party/renderdoc_app",
 )
+
+http_archive(
+    name = "com_github_nlohmann_json",
+    build_file = "//third_party:nlohmann_json.BUILD",
+    strip_prefix = "json-3.11.2",
+    urls = ["https://github.com/nlohmann/json/archive/refs/tags/v3.11.2.tar.gz"],
+)

@@ -30,10 +30,7 @@ absl::StatusOr<core::RefCountPtr<Instance>> Instance::create(absl::Span<const ch
         absl::StrFormat("failed to create instance, ret_code: %s", VkResult_name(ret_code)));
   }
 
-  auto result = core::make_refcounted<Instance>();
-  result->vk_instance_ = vk_instance;
-
-  return result;
+  return core::make_refcounted<Instance>(vk_instance);
 }
 
 absl::StatusOr<core::RefCountPtr<Instance>> Instance::create_for_3d() {
@@ -51,6 +48,12 @@ absl::StatusOr<core::RefCountPtr<Instance>> Instance::create_for_3d() {
   };
 
   return create(enabled_layers, enabled_extensions);
+}
+
+Instance::~Instance() {
+  if (vk_instance_) {
+    VkApi::get()->vkDestroyInstance(vk_instance_, nullptr);
+  }
 }
 
 absl::StatusOr<std::vector<VkPhysicalDevice>> Instance::enumerate_physical_devices() const {

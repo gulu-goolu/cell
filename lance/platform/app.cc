@@ -8,13 +8,17 @@
 namespace {
 class StartupContextImpl : public ::lance::platform::StartupContext {
  public:
+  lance::rendering::Instance* instance() const override { return instance_.get(); }
+
   VkSurfaceKHR vk_surface() const override { return vk_surface_; }
 
-  VkInstance vk_instance_{VK_NULL_HANDLE};
+  lance::core::RefCountPtr<lance::rendering::Instance> instance_;
+
   VkSurfaceKHR vk_surface_{VK_NULL_HANDLE};
 };
 
-VkInstance create_instance_or_die(const ::lance::platform::AppStartupOptions* options) {
+lance::core::RefCountPtr<lance::rendering::Instance> create_instance_or_die(
+    const ::lance::platform::AppStartupOptions* options) {
   uint32_t extension_count = 0;
   const char* const* extensions = glfwGetRequiredInstanceExtensions(&extension_count);
 
@@ -26,7 +30,7 @@ VkInstance create_instance_or_die(const ::lance::platform::AppStartupOptions* op
   CHECK(::lance::rendering::VkApi::get()->vkCreateInstance(&instance_create_info, nullptr,
                                                            &vk_instance) == VK_SUCCESS);
 
-  return vk_instance;
+  return lance::core::make_refcounted<lance::rendering::Instance>(vk_instance);
 }
 
 }  // namespace
@@ -49,10 +53,10 @@ int main(int argc, char* argv[]) {
   StartupContextImpl startup_context;
 
   // create instance
-  startup_context.vk_instance_ = create_instance_or_die(&startup_options);
+  startup_context.instance_ = create_instance_or_die(&startup_options);
 
   // create surface
-  CHECK(glfwCreateWindowSurface(startup_context.vk_instance_, window, nullptr,
+  CHECK(glfwCreateWindowSurface(startup_context.instance_->vk_instance(), window, nullptr,
                                 &startup_context.vk_surface_) == VK_SUCCESS);
 
   LANCE_THROW_IF_FAILED(app->startup(&startup_context));

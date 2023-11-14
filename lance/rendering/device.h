@@ -23,6 +23,10 @@ class Instance : public core::Inherit<Instance, core::Object> {
   // create a instance for 3d rendering
   static absl::StatusOr<core::RefCountPtr<Instance>> create_for_3d();
 
+  Instance(VkInstance vk_instance) : vk_instance_(vk_instance) {}
+
+  ~Instance() override;
+
   VkInstance vk_instance() const { return vk_instance_; }
 
   absl::StatusOr<std::vector<VkPhysicalDevice>> enumerate_physical_devices() const;

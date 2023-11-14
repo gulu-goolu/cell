@@ -62,6 +62,7 @@ VkApi::VkApi() {
   VK_API_LOAD(vkEnumerateInstanceExtensionProperties);
 
   VK_API_LOAD(vkCreateInstance);
+  VK_API_LOAD(vkDestroyInstance);
   VK_API_LOAD(vkCreateDevice);
   VK_API_LOAD(vkDestroyDevice);
   VK_API_LOAD(vkAllocateMemory);

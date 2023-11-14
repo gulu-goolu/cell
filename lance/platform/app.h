@@ -1,6 +1,7 @@
 #pragma once
 
 #include "absl/status/status.h"
+#include "lance/rendering/device.h"
 #include "vulkan/vulkan_core.h"
 
 namespace lance {
@@ -17,6 +18,8 @@ struct AppStartupOptions {
 
 struct StartupContext {
   virtual ~StartupContext() = default;
+
+  virtual rendering::Instance* instance() const = 0;
 
   virtual VkSurfaceKHR vk_surface() const = 0;
 };

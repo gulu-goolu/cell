@@ -19,6 +19,7 @@ class VkApi {
   VK_API_DEFINE(vkEnumerateInstanceExtensionProperties);
 
   VK_API_DEFINE(vkCreateInstance);
+  VK_API_DEFINE(vkDestroyInstance);
   VK_API_DEFINE(vkCreateDevice);
   VK_API_DEFINE(vkDestroyDevice);
   VK_API_DEFINE(vkAllocateMemory);

@@ -21,7 +21,7 @@ struct StartupContext {
 
   virtual rendering::Instance* instance() const = 0;
 
-  virtual VkSurfaceKHR vk_surface() const = 0;
+  virtual rendering::Surface* surface() const = 0;
 };
 
 class IApp {

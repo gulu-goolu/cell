@@ -10,11 +10,10 @@ class StartupContextImpl : public ::lance::platform::StartupContext {
  public:
   lance::rendering::Instance* instance() const override { return instance_.get(); }
 
-  VkSurfaceKHR vk_surface() const override { return vk_surface_; }
+  lance::rendering::Surface* surface() const override { return surface_.get(); }
 
   lance::core::RefCountPtr<lance::rendering::Instance> instance_;
-
-  VkSurfaceKHR vk_surface_{VK_NULL_HANDLE};
+  lance::core::RefCountPtr<lance::rendering::Surface> surface_;
 };
 
 lance::core::RefCountPtr<lance::rendering::Instance> create_instance_or_die(
@@ -56,8 +55,11 @@ int main(int argc, char* argv[]) {
   startup_context.instance_ = create_instance_or_die(&startup_options);
 
   // create surface
+  VkSurfaceKHR vk_surface;
   CHECK(glfwCreateWindowSurface(startup_context.instance_->vk_instance(), window, nullptr,
-                                &startup_context.vk_surface_) == VK_SUCCESS);
+                                &vk_surface) == VK_SUCCESS);
+  startup_context.surface_ = lance::core::make_refcounted<lance::rendering::Surface>(
+      startup_context.instance_, vk_surface);
 
   LANCE_THROW_IF_FAILED(app->startup(&startup_context));
 

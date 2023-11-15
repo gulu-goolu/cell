@@ -142,6 +142,12 @@ absl::StatusOr<core::RefCountPtr<Device>> Instance::create_device_for_graphics()
                                        absl::MakeConstSpan(&graphics_queue_famil_index, 1));
 }
 
+Surface::~Surface() {
+  if (vk_surface_) {
+    VkApi::get()->vkDestroySurfaceKHR(instance_->vk_instance(), vk_surface_, nullptr);
+  }
+}
+
 Device::Device(core::RefCountPtr<Instance> instance, VkPhysicalDevice vk_physical_device,
                VkDevice vk_device, absl::Span<const uint32_t> queue_family_indices)
     : instance_(instance),

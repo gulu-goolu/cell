@@ -100,6 +100,7 @@ class VkApi {
   VK_API_DEFINE(vkCreateDescriptorPool);
   VK_API_DEFINE(vkCmdUpdateBuffer);
   VK_API_DEFINE(vkCmdPipelineBarrier);
+  VK_API_DEFINE(vkDestroySurfaceKHR);
 
 #undef VK_API_DEFINE
 

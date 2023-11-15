@@ -39,6 +39,20 @@ class Instance : public core::Inherit<Instance, core::Object> {
   VkInstance vk_instance_{VK_NULL_HANDLE};
 };
 
+class Surface : public core::Inherit<Surface, core::Object> {
+ public:
+  Surface(core::RefCountPtr<Instance> instance, VkSurfaceKHR vk_surface)
+      : instance_(instance), vk_surface_(vk_surface) {}
+
+  ~Surface() override;
+
+  VkSurfaceKHR vk_surface() const { return vk_surface_; }
+
+ private:
+  core::RefCountPtr<Instance> instance_;
+  VkSurfaceKHR vk_surface_{VK_NULL_HANDLE};
+};
+
 class Device : public core::Inherit<Device, core::Object> {
  public:
   explicit Device(core::RefCountPtr<Instance> instance, VkPhysicalDevice vk_physical_device,

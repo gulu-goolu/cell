@@ -119,18 +119,13 @@ class Buffer : public core::Inherit<Buffer, core::Object> {
 
 class Image : public core::Inherit<Image, core::Object> {
  public:
-  Image(core::RefCountPtr<Device> device, VkImage vk_image)
-      : device_(device), vk_image_(vk_image) {}
-
   ~Image();
 
-  VkImage vk_image() const { return vk_image_; }
+  virtual Device* device() const = 0;
+
+  virtual VkImage vk_image() const = 0;
 
   VkMemoryRequirements memory_requirements() const;
-
- private:
-  core::RefCountPtr<Device> device_;
-  VkImage vk_image_{VK_NULL_HANDLE};
 };
 
 class ImageView : public core::Inherit<ImageView, core::Object> {
@@ -302,6 +297,16 @@ class DescriptorPool : public core::Inherit<DescriptorPool, core::Object> {
 class DescriptorSet : public core::Inherit<DescriptorSet, core::Object> {
  public:
   virtual VkDescriptorSet vk_descriptor_set() const = 0;
+};
+
+class Swapchain : public core::Inherit<Swapchain, core::Object> {
+ public:
+  absl::Status acquire_next_image();
+
+  absl::StatusOr<uint32_t> back_buffer_index() const;
+
+  // present back buffer
+  absl::Status present();
 };
 
 }  // namespace rendering

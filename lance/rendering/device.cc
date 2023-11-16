@@ -365,15 +365,10 @@ VkMemoryRequirements Buffer::memory_requirements() const {
   return memory_requirements;
 }
 
-Image::~Image() {
-  if (vk_image_) {
-    VkApi::get()->vkDestroyImage(device_->vk_device(), vk_image_, nullptr);
-  }
-}
-
 VkMemoryRequirements Image::memory_requirements() const {
   VkMemoryRequirements memory_requirements;
-  VkApi::get()->vkGetImageMemoryRequirements(device_->vk_device(), vk_image_, &memory_requirements);
+  VkApi::get()->vkGetImageMemoryRequirements(device()->vk_device(), vk_image(),
+                                             &memory_requirements);
 
   return memory_requirements;
 }
@@ -548,6 +543,14 @@ absl::StatusOr<core::RefCountPtr<DescriptorSet>> DescriptorPool::allocate_descri
 
   return core::make_refcounted<DescriptorSetImpl>(this, vk_descriptor_set);
 }
+
+namespace {
+class SwapchainImage : public core::Inherit<SwapchainImage, Image> {
+ public:
+ private:
+  core::RefCountPtr<Swapchain> swapchain_;
+};
+}  // namespace
 
 }  // namespace rendering
 }  // namespace lance

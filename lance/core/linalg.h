@@ -61,9 +61,9 @@ struct Matrix4x4 {
 };
 
 struct BoundingBox {
-  Float3 min_pt;
+  Float3 lower;
 
-  Float3 max_pt;
+  Float3 upper;
 };
 
 template <typename Sink>

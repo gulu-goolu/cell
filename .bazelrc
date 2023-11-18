@@ -1,3 +1,4 @@
 build:windows --cxxopt -std:c++17
 build:linux --cxxopt -std=c++17
 build --experimental_cc_implementation_deps
+common --enable_platform_specific_config

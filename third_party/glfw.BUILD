@@ -12,6 +12,7 @@ cmake(
     out_static_libs = select(
         {
             "@platforms//os:windows": ["glfw3.lib"],
+            "@platforms//os:linux": ["libglfw3.a"],
         },
     ),
     visibility = ["//visibility:public"],

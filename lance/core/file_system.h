@@ -25,5 +25,7 @@ class FileSystem : public core::Inherit<FileSystem, core::Object> {
   virtual absl::StatusOr<core::RefCountPtr<OutputStream>> create_output_stream(
       std::string_view uri) = 0;
 };
+
+absl::StatusOr<core::RefCountPtr<FileSystem>> create_local_file_system();
 }  // namespace core
 }  // namespace lance

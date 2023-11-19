@@ -17,7 +17,7 @@ class RenderGraphResource : public core::Inherit<RenderGraphResource, core::Obje
 
 class RenderGraphImage : public core::Inherit<RenderGraphImage, RenderGraphResource> {
  public:
-  virtual absl::Status append_image_usage(VkImageUsageFlags flags) = 0;
+  virtual absl::Status add_usage(VkImageUsageFlags flags) = 0;
 
   virtual VkImageView image_view() const = 0;
 

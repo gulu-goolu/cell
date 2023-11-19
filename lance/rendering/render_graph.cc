@@ -33,7 +33,7 @@ class RenderGraphTexture2D : public core::Inherit<RenderGraphTexture2D, RenderGr
     }
   }
 
-  absl::Status append_image_usage(VkImageUsageFlags flags) override {
+  absl::Status add_usage(VkImageUsageFlags flags) override {
     usage_flags_ = usage_flags_ | flags;
 
     return absl::OkStatus();
@@ -321,7 +321,7 @@ class GraphicsPassBuilderImpl : public GraphicsPassBuilder {
                                             const VkRect2D *render_area) override {
     CHECK(color_attachments.find(location) == color_attachments.end());
 
-    auto st = image->append_image_usage(VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT);
+    auto st = image->add_usage(VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT);
     CHECK(st.ok()) << "err_msg: " << st.ToString();
 
     color_attachments[location].image = image;
@@ -342,7 +342,7 @@ class GraphicsPassBuilderImpl : public GraphicsPassBuilder {
     depth_stencil_attachment->id = image->id();
     depth_stencil_attachment->description = description;
 
-    auto st = image->append_image_usage(VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT);
+    auto st = image->add_usage(VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT);
     CHECK(st.ok()) << "err_msg: " << st.ToString();
 
     return this;
